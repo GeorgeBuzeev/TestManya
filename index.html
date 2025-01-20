@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Complex</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: #333;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💤 Sleep Complex</h1>
+        <p>Добро пожаловать в 3-дневный комплекс для улучшения сна!</p>
+        <button onclick="startDay(1)">Начать 1 день</button>
+        <button onclick="startDay(2)">Начать 2 день</button>
+        <button onclick="startDay(3)">Начать 3 день</button>
+    </div>
+
+    <script>
+        // Функция для запуска дня
+        function startDay(day) {
+            alert(`Вы начали ${day} день!`);
+            // Здесь можно добавить логику для перехода к следующему этапу
+        }
+
+        // Инициализация Telegram Web App
+        function initTelegramApp() {
+            if (window.Telegram) {
+                const tg = window.Telegram.WebApp;
+                tg.expand(); // Развернуть приложение на весь экран
+                tg.MainButton.setText("Готово").show().onClick(() => {
+                    tg.close(); // Закрыть приложение
+                });
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        window.onload = initTelegramApp;
+    </script>
+</body>
+</html>
