@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sleep Complex</title>
+    <meta property="og:title" content="💤 Sleep Complex">
+    <meta property="og:description" content="Добро пожаловать в 3-дневный комплекс для улучшения сна!">
+    <meta property="og:image" content="https://your-github-pages-url/image.png">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -38,14 +41,12 @@
         <button onclick="startDay(2)">Начать 2 день</button>
         <button onclick="startDay(3)">Начать 3 день</button>
     </div>
-
     <script>
         // Функция для запуска дня
         function startDay(day) {
             alert(`Вы начали ${day} день!`);
             // Здесь можно добавить логику для перехода к следующему этапу
         }
-
         // Инициализация Telegram Web App
         function initTelegramApp() {
             if (window.Telegram) {
@@ -56,7 +57,6 @@
                 });
             }
         }
-
         // Инициализация при загрузке страницы
         window.onload = initTelegramApp;
     </script>
