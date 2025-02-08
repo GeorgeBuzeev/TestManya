@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sleep Complex</title>
+    <title>Mini App for Sleep Complex</title>
     <meta property="og:title" content="💤 Sleep Complex">
     <meta property="og:description" content="Добро пожаловать в 3-дневный комплекс для улучшения сна!">
     <meta property="og:image" content="https://your-github-pages-url/image.png">
@@ -31,22 +31,71 @@
         button:hover {
             background-color: #0056b3;
         }
+        .menu-button {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .content {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>💤 Sleep Complex</h1>
-        <p>Добро пожаловать в 3-дневный комплекс для улучшения сна!</p>
-        <button onclick="startDay(1)">Начать 1 день</button>
-        <button onclick="startDay(2)">Начать 2 день</button>
-        <button onclick="startDay(3)">Начать 3 день</button>
+        <div class="menu">
+            <button class="menu-button" id="homeButton">Главная страница</button>
+            <button class="menu-button" id="sleepButton">Сон</button>
+            <button class="menu-button" id="profileButton">Профиль</button>
+        </div>
+        <div class="content" id="content">
+            <!-- Content will be loaded here -->
+        </div>
+        <button id="backToMainMenu" style="display: none;">🏠Главное меню</button>
     </div>
+
     <script>
-        // Функция для запуска дня
+        // Определение активной вкладки
+        let activeTab = 'home';
+
+        // Функция для загрузки контента
+        function loadContent(tab) {
+            document.getElementById('content').innerHTML = '';
+            document.getElementById('backToMainMenu').style.display = 'none';
+
+            switch (tab) {
+                case 'home':
+                    document.getElementById('content').innerHTML = `
+                        <h2>Главная страница</h2>
+                        <p>Добро пожаловать в 3-дневный комплекс для улучшения сна!</p>
+                        <button onclick="startDay(1)">Начать 1 день</button>
+                        <button onclick="startDay(2)">Начать 2 день</button>
+                        <button onclick="startDay(3)">Начать 3 день</button>
+                    `;
+                    break;
+                case 'sleep':
+                    document.getElementById('content').innerHTML = `
+                        <h2>Сон</h2>
+                        <p>🚧 Эта функция будет доступна в ближайшем обновлении. Пожалуйста, ожидайте!</p>
+                    `;
+                    break;
+                case 'profile':
+                    document.getElementById('content').innerHTML = `
+                        <h2>Профиль</h2>
+                        <p>🚧 Эта функция будет доступна в ближайшем обновлении. Пожалуйста, ожидайте!</p>
+                    `;
+                    break;
+                default:
+                    document.getElementById('content').innerHTML = '';
+            }
+        }
+
+        // Функция для начала дня
         function startDay(day) {
             alert(`Вы начали ${day} день!`);
             // Здесь можно добавить логику для перехода к следующему этапу
         }
+
         // Инициализация Telegram Web App
         function initTelegramApp() {
             if (window.Telegram) {
@@ -57,6 +106,29 @@
                 });
             }
         }
+
+        // Обработчики для кнопок меню
+        document.getElementById('homeButton').addEventListener('click', () => {
+            activeTab = 'home';
+            loadContent('home');
+        });
+
+        document.getElementById('sleepButton').addEventListener('click', () => {
+            activeTab = 'sleep';
+            loadContent('sleep');
+        });
+
+        document.getElementById('profileButton').addEventListener('click', () => {
+            activeTab = 'profile';
+            loadContent('profile');
+        });
+
+        // Обработчик для кнопки возврата в главное меню
+        document.getElementById('backToMainMenu').addEventListener('click', () => {
+            activeTab = 'home';
+            loadContent('home');
+        });
+
         // Инициализация при загрузке страницы
         window.onload = initTelegramApp;
     </script>
