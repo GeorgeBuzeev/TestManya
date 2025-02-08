@@ -4,98 +4,33 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mini App for Sleep Complex</title>
-    <meta property="og:title" content="💤 Sleep Complex">
-    <meta property="og:description" content="Добро пожаловать в 3-дневный комплекс для улучшения сна!">
-    <meta property="og:image" content="https://your-github-pages-url/image.png">
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
+            background-color: #e6ffea; /* Пастельный зеленый */
             color: #333;
-            padding: 20px;
-            text-align: center;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 0;
         }
         .container {
-            max-width: 600px;
-            margin: 0 auto;
+            text-align: center;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            margin: 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .menu-button {
-            width: 100%;
-            margin-bottom: 10px;
-        }
-        .content {
-            margin-top: 20px;
+        h1 {
+            font-size: 24px;
+            margin: 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>💤 Sleep Complex</h1>
-        <div class="menu">
-            <button class="menu-button" id="homeButton">Главная страница</button>
-            <button class="menu-button" id="sleepButton">Сон</button>
-            <button class="menu-button" id="profileButton">Профиль</button>
-        </div>
-        <div class="content" id="content">
-            <!-- Content will be loaded here -->
-        </div>
-        <button id="backToMainMenu" style="display: none;">🏠Главное меню</button>
+        <h1>Ваш уровень: <span id="level">1</span></h1>
     </div>
 
     <script>
-        // Определение активной вкладки
-        let activeTab = 'home';
-
-        // Функция для загрузки контента
-        function loadContent(tab) {
-            document.getElementById('content').innerHTML = '';
-            document.getElementById('backToMainMenu').style.display = 'none';
-
-            switch (tab) {
-                case 'home':
-                    document.getElementById('content').innerHTML = `
-                        <h2>Главная страница</h2>
-                        <p>Добро пожаловать в 3-дневный комплекс для улучшения сна!</p>
-                        <button onclick="startDay(1)">Начать 1 день</button>
-                        <button onclick="startDay(2)">Начать 2 день</button>
-                        <button onclick="startDay(3)">Начать 3 день</button>
-                    `;
-                    break;
-                case 'sleep':
-                    document.getElementById('content').innerHTML = `
-                        <h2>Сон</h2>
-                        <p>🚧 Эта функция будет доступна в ближайшем обновлении. Пожалуйста, ожидайте!</p>
-                    `;
-                    break;
-                case 'profile':
-                    document.getElementById('content').innerHTML = `
-                        <h2>Профиль</h2>
-                        <p>🚧 Эта функция будет доступна в ближайшем обновлении. Пожалуйста, ожидайте!</p>
-                    `;
-                    break;
-                default:
-                    document.getElementById('content').innerHTML = '';
-            }
-        }
-
-        // Функция для начала дня
-        function startDay(day) {
-            alert(`Вы начали ${day} день!`);
-            // Здесь можно добавить логику для перехода к следующему этапу
-        }
-
         // Инициализация Telegram Web App
         function initTelegramApp() {
             if (window.Telegram) {
@@ -107,30 +42,22 @@
             }
         }
 
-        // Обработчики для кнопок меню
-        document.getElementById('homeButton').addEventListener('click', () => {
-            activeTab = 'home';
-            loadContent('home');
-        });
-
-        document.getElementById('sleepButton').addEventListener('click', () => {
-            activeTab = 'sleep';
-            loadContent('sleep');
-        });
-
-        document.getElementById('profileButton').addEventListener('click', () => {
-            activeTab = 'profile';
-            loadContent('profile');
-        });
-
-        // Обработчик для кнопки возврата в главное меню
-        document.getElementById('backToMainMenu').addEventListener('click', () => {
-            activeTab = 'home';
-            loadContent('home');
-        });
-
         // Инициализация при загрузке страницы
         window.onload = initTelegramApp;
+
+        // Функция для получения уровня пользователя
+        async function getUserLevel() {
+            try {
+                const user_id = 123456789;  // Здесь должен быть идентификатор текущего пользователя
+                const level = get_user_level(user_id);
+                document.getElementById('level').textContent = level;
+            } catch (error) {
+                console.error('Произошла ошибка:', error);
+            }
+        }
+
+        // Вызываем функцию для получения уровня пользователя при загрузке страницы
+        window.onload = getUserLevel;
     </script>
 </body>
 </html>
