@@ -3,61 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini App for Sleep Complex</title>
+    <title>Сказки для сна — Маня</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #e6ffea; /* Пастельный зеленый */
-            color: #333;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-family: 'Arial', sans-serif;
+            background-color: #1a1a2e; /* Тёмный фон, как в Headspace */
+            color: #ffffff;
             margin: 0;
             padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
-        .container {
+        .header {
+            width: 100%;
+            padding: 20px 0;
+            background-color: #16213e;
             text-align: center;
         }
         h1 {
             font-size: 24px;
             margin: 0;
+            color: #e0e0e0;
+        }
+        .content {
+            padding: 20px;
+            width: 90%;
+            max-width: 600px;
+        }
+        .card {
+            background-color: #16213e; /* Цвет карточек, как в Headspace */
+            border-radius: 15px;
+            margin: 15px 0;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.3s, background-color 0.3s;
+        }
+        .card:hover {
+            transform: scale(1.05);
+            background-color: #0f3460;
+        }
+        .card-title {
+            font-size: 18px;
+            margin: 0 0 10px 0;
+            color: #fff;
+        }
+        .card-icon {
+            font-size: 24px;
+            margin-right: 10px;
+            color: #ffd700; /* Золотистая иконка, как звёзды */
+        }
+        audio {
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Ваш уровень: <span id="level">1</span></h1>
+    <div class="header">
+        <h1>Сказки для сна с Маней</h1>
     </div>
+    <div class="content">
+        <div class="card" onclick="playAudio('story1')">
+            <div class="card-title"><span class="card-icon">🌙</span> Рассказ Джорджа - Путешествие в лагерь</div>
+        </div>
+        <div class="card" onclick="playAudio('story2')">
+            <div class="card-title"><span class="card-icon">🌟</span> Рассказ Милы - Маленькая мечта</div>
+        </div>
+        <div class="card" onclick="playAudio('story3')">
+            <div class="card-title"><span class="card-icon">✨</span> Рассказ Джорджа - Элиза</div>
+        </div>
+    </div>
+    <audio id="player" controls class="hidden"></audio>
 
     <script>
-        // Инициализация Telegram Web App
-        function initTelegramApp() {
-            if (window.Telegram) {
-                const tg = window.Telegram.WebApp;
-                tg.expand(); // Развернуть приложение на весь экран
-                tg.MainButton.setText("Готово").show().onClick(() => {
-                    tg.close(); // Закрыть приложение
-                });
-            }
+        const audioFiles = {
+            'story1': 'https://yourserver.com/free/Рассказ Джорджа - Путешествие в лагерь.mp3', // Замени на реальный URL
+            'story2': 'https://yourserver.com/free/Рассказ Милы - Маленькая мечта.mp3', // Замени
+            'story3': 'https://yourserver.com/free/Рассказ Джорджа - Элиза.mp3' // Замени
+        };
+
+        function playAudio(storyId) {
+            const player = document.getElementById('player');
+            player.src = audioFiles[storyId];
+            player.classList.remove('hidden');
+            player.play();
         }
-
-        // Инициализация при загрузке страницы
-        window.onload = initTelegramApp;
-
-        // Функция для получения уровня пользователя
-        async function getUserLevel() {
-            try {
-                const user_id = 123456789;  // Здесь должен быть идентификатор текущего пользователя
-                const level = get_user_level(user_id);
-                document.getElementById('level').textContent = level;
-            } catch (error) {
-                console.error('Произошла ошибка:', error);
-            }
-        }
-
-        // Вызываем функцию для получения уровня пользователя при загрузке страницы
-        window.onload = getUserLevel;
     </script>
 </body>
 </html>
