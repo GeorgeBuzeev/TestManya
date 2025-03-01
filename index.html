@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: 'Arial', sans-serif;
-            background-color: #1a1a2e; /* Тёмный фон, как в Headspace */
+            background-color: #1a1a2e;
             color: #ffffff;
             margin: 0;
             padding: 0;
@@ -33,34 +33,91 @@
             max-width: 600px;
         }
         .card {
-            background-color: #16213e; /* Цвет карточек, как в Headspace */
+            background: linear-gradient(135deg, #16213e, #0f3460);
             border-radius: 15px;
             margin: 15px 0;
             padding: 20px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             cursor: pointer;
-            transition: transform 0.3s, background-color 0.3s;
+            transition: transform 0.3s, background 0.3s;
         }
         .card:hover {
             transform: scale(1.05);
-            background-color: #0f3460;
+            background: linear-gradient(135deg, #0f3460, #16213e);
         }
         .card-title {
             font-size: 18px;
             margin: 0 0 10px 0;
             color: #fff;
+            display: flex;
+            align-items: center;
         }
         .card-icon {
             font-size: 24px;
             margin-right: 10px;
-            color: #ffd700; /* Золотистая иконка, как звёзды */
+            color: #ffd700;
+        }
+        .player {
+            width: 90%;
+            max-width: 600px;
+            background: linear-gradient(135deg, #16213e, #0f3460);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-top: 20px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .player.hidden {
+            display: none;
+        }
+        .track-title {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #e0e0e0;
+            text-align: center;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        .control-btn {
+            background: none;
+            border: none;
+            color: #ffd700;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 10px;
+            transition: color 0.3s;
+        }
+        .control-btn:hover {
+            color: #ffeb3b;
+        }
+        #progress {
+            width: 100%;
+            height: 5px;
+            background-color: #333;
+            border-radius: 5px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        #progress-bar {
+            height: 100%;
+            background-color: #ffd700;
+            border-radius: 5px;
+            width: 0;
+            transition: width 0.1s linear;
         }
         audio {
-            width: 100%;
-            margin-top: 20px;
-            border-radius: 10px;
-        }
-        .hidden {
             display: none;
         }
     </style>
@@ -80,21 +137,88 @@
             <div class="card-title"><span class="card-icon">✨</span> Рассказ Джорджа - Элиза</div>
         </div>
     </div>
-    <audio id="player" controls class="hidden"></audio>
+    <div id="player" class="player hidden">
+        <div class="track-title" id="trackTitle"></div>
+        <div class="controls">
+            <button class="control-btn" onclick="togglePlayPause()">⏸</button>
+            <button class="control-btn" onclick="togglePlayPause()">▶</button>
+        </div>
+        <div id="progress">
+            <div id="progress-bar"></div>
+        </div>
+    </div>
+    <audio id="audio" preload="auto"></audio>
 
     <script>
         const audioFiles = {
-            'story1': 'https://yourserver.com/free/Рассказ Джорджа - Путешествие в лагерь.mp3', // Замени на реальный URL
-            'story2': 'https://yourserver.com/free/Рассказ Милы - Маленькая мечта.mp3', // Замени
-            'story3': 'https://yourserver.com/free/Рассказ Джорджа - Элиза.mp3' // Замени
+            'story1': 'https://drive.google.com/uc?export=download&id=1q5YdrVzprzeVlC5kXvTCp9jFg6pV14TL',
+            'story2': 'https://drive.google.com/uc?export=download&id=1eGSlHZOHMeIK56HC5-EqFv63cocUNhFL',
+            'story3': 'https://drive.google.com/uc?export=download&id=1iMCJlLZ9gfTyDwkBKXUEVnwQli-Tsn8T'
         };
 
+        let currentAudio = null;
+        const player = document.getElementById('player');
+        const audio = document.getElementById('audio');
+        const trackTitle = document.getElementById('trackTitle');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progress-bar');
+        let isPlaying = false;
+
         function playAudio(storyId) {
-            const player = document.getElementById('player');
-            player.src = audioFiles[storyId];
+            if (currentAudio === storyId) {
+                togglePlayPause();
+                return;
+            }
+            currentAudio = storyId;
+            audio.src = audioFiles[storyId];
+            trackTitle.textContent = `Сейчас играет: ${storyId.split('_')[1].replace(/-/g, ' ')}`;
             player.classList.remove('hidden');
-            player.play();
+            audio.play().then(() => {
+                isPlaying = true;
+                updateControls();
+            }).catch(error => console.error('Ошибка воспроизведения:', error));
+            audio.onended = () => {
+                isPlaying = false;
+                updateControls();
+            };
         }
+
+        function togglePlayPause() {
+            if (isPlaying) {
+                audio.pause();
+                isPlaying = false;
+            } else {
+                audio.play().then(() => {
+                    isPlaying = true;
+                }).catch(error => console.error('Ошибка воспроизведения:', error));
+            }
+            updateControls();
+        }
+
+        function updateControls() {
+            const playBtn = player.querySelector('button:nth-child(2)');
+            const pauseBtn = player.querySelector('button:nth-child(1)');
+            if (isPlaying) {
+                playBtn.style.display = 'none';
+                pauseBtn.style.display = 'block';
+            } else {
+                playBtn.style.display = 'block';
+                pauseBtn.style.display = 'none';
+            }
+        }
+
+        audio.ontimeupdate = () => {
+            const progressPercent = (audio.currentTime / audio.duration) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+        };
+
+        progress.addEventListener('click', (e) => {
+            const rect = progress.getBoundingClientRect();
+            const clickPosition = e.clientX - rect.left;
+            const progressWidth = rect.width;
+            const newTime = (clickPosition / progressWidth) * audio.duration;
+            audio.currentTime = newTime;
+        });
     </script>
 </body>
 </html>
