@@ -4,38 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Сказки для сна</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #1a1a2e;
-            color: white;
+            font-family: 'Inter', Arial, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            height: 100vh;
         }
-        h1 {
-            font-size: 24px;
-            margin-bottom: 20px;
+        .tab-buttons {
+            display: flex;
+            justify-content: space-around;
+            background-color: #1e1e1e;
+            padding: 10px 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
-        .story-button {
-            display: block;
-            width: 80%;
-            margin: 10px auto;
-            padding: 15px;
-            font-size: 18px;
-            background-color: #16213e;
-            color: white;
+        .tab-button {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            background-color: transparent;
             border: none;
-            border-radius: 10px;
+            color: #b0b0b0;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 12px;
+            transition: all 0.3s ease;
             cursor: pointer;
-            transition: background-color 0.3s;
         }
-        .story-button:hover {
-            background-color: #0f3460;
+        .tab-button.active {
+            background-color: #2c2c2c;
+            color: #ffffff;
+        }
+        .tab-button:hover {
+            background-color: #2c2c2c;
+            color: #ffffff;
+        }
+        .tab-content {
+            display: none;
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .tab-content.active {
+            display: flex;
         }
         .player {
             background: linear-gradient(135deg, #4a00e0, #8e2de2);
@@ -43,7 +64,7 @@
             border-radius: 20px;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
             max-width: 400px;
-            margin: 30px auto;
+            margin: 20px auto;
             color: white;
         }
         .player-title {
@@ -70,6 +91,7 @@
         .player-button svg {
             width: 24px;
             height: 24px;
+            fill: white;
         }
         .play-button svg {
             width: 32px;
@@ -99,44 +121,111 @@
             margin-top: 10px;
             color: rgba(255, 255, 255, 0.7);
         }
+        .story-button {
+            display: block;
+            width: 80%;
+            margin: 10px auto;
+            padding: 15px;
+            font-size: 18px;
+            background-color: #2c2c2c;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .story-button:hover {
+            background-color: #3c3c3c;
+        }
+        .catalog-button {
+            display: block;
+            width: 80%;
+            margin: 20px auto;
+            padding: 12px;
+            background-color: #4a00e0;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        .catalog-button:hover {
+            background-color: #6a00ff;
+        }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Сказки для сна</h1>
-    <button class="story-button" onclick="playStory('george_camp')">Рассказ Джорджа - Путешествие в лагерь</button>
-    <button class="story-button" onclick="playStory('george_eliza')">Рассказ Джорджа - Элиза</button>
-    <button class="story-button" onclick="playStory('mila_dream')">Рассказ Милы - Маленькая мечта</button>
+    <div class="tab-buttons">
+        <button class="tab-button active" onclick="openTab('today')">
+            <span>🌙</span>
+            Сегодня
+        </button>
+        <button class="tab-button" onclick="openTab('sleep')">
+            <span>😴</span>
+            Сон
+        </button>
+    </div>
 
-    <div class="player">
-        <div class="player-title" id="current-story">Выберите сказку</div>
-        <div class="player-controls">
-            <button class="player-button" onclick="prevStory()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <polygon points="19 20 9 12 19 4 19 20"/>
-                    <line x1="5" y1="4" x2="5" y2="20"/>
-                </svg>
-            </button>
-            <button class="player-button play-button" id="play-pause" onclick="togglePlay()">
-                <svg id="play-icon" viewBox="0 0 24 24" fill="white">
-                    <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
-                <svg id="pause-icon" viewBox="0 0 24 24" fill="white" style="display: none;">
-                    <rect x="6" y="4" width="4" height="16"/>
-                    <rect x="14" y="4" width="4" height="16"/>
-                </svg>
-            </button>
-            <button class="player-button" onclick="nextStory()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                    <polygon points="5 4 15 12 5 20 5 4"/>
-                    <line x1="19" y1="4" x2="19" y2="20"/>
-                </svg>
-            </button>
+    <div id="today" class="tab-content active">
+        <div class="max-w-md mx-auto">
+            <h1 class="text-2xl mb-6 mt-4">Сказки для сна</h1>
+            <button class="story-button" onclick="playStory('george_camp')">Рассказ Джорджа - Путешествие в лагерь</button>
+            <button class="story-button" onclick="playStory('george_eliza')">Рассказ Джорджа - Элиза</button>
+            <button class="story-button" onclick="playStory('mila_dream')">Рассказ Милы - Маленькая мечта</button>
+
+            <div class="player mt-6">
+                <div class="player-title" id="current-story">Выберите сказку</div>
+                <div class="player-controls">
+                    <button class="player-button" onclick="prevStory()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <polygon points="19 20 9 12 19 4 19 20"/>
+                            <line x1="5" y1="4" x2="5" y2="20"/>
+                        </svg>
+                    </button>
+                    <button class="player-button play-button" id="play-pause" onclick="togglePlay()">
+                        <svg id="play-icon" viewBox="0 0 24 24" fill="white">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        <svg id="pause-icon" viewBox="0 0 24 24" fill="white" style="display: none;">
+                            <rect x="6" y="4" width="4" height="16"/>
+                            <rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                    </button>
+                    <button class="player-button" onclick="nextStory()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                            <polygon points="5 4 15 12 5 20 5 4"/>
+                            <line x1="19" y1="4" x2="19" y2="20"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress" id="progress"></div>
+                </div>
+                <div class="time" id="time">0:00 / 0:00</div>
+                <div class="up-next" id="up-next">Up Next: -</div>
+            </div>
         </div>
-        <div class="progress-bar">
-            <div class="progress" id="progress"></div>
+    </div>
+
+    <div id="sleep" class="tab-content">
+        <div class="max-w-md mx-auto">
+            <h1 class="text-2xl mb-6 mt-4">Спокойный сон — без усилий</h1>
+            <p class="text-gray-400 mb-4">Премиум-доступ к боту Мане — это не просто сказки, а ваш инструмент для лёгкого засыпания, глубокого сна и спокойного утра.</p>
+            <h2 class="text-xl mb-4">🎯 Что вы получите?</h2>
+            <ul class="list-disc list-inside text-gray-300 mb-6">
+                <li>Подготовитесь к лучшему отдыху благодаря уникальным историям с эффектом медитации, озвученным известными голосами</li>
+                <li>Проследите за вашим настроением, каждый вечер, перед сном</li>
+                <li>А еще - создание и озвучка персональных историй по запросу, превращая ваши мечты в реальность!</li>
+            </ul>
+            <h2 class="text-xl mb-4">🌟 Тарифы на выбор:</h2>
+            <ul class="list-disc list-inside text-gray-300 mb-4">
+                <li>На 30 дней - 450 рублей</li>
+                <li>На 365 дней + 30 дней бесплатно 🎁 - 3600 рублей<br>Экономия 39%! Это всего 276 рублей в месяц! Дешевле капучинки</li>
+            </ul>
+            <button class="catalog-button">Каталог</button>
         </div>
-        <div class="time" id="time">0:00 / 0:00</div>
-        <div class="up-next" id="up-next">Up Next: -</div>
     </div>
 
     <audio id="player" preload="metadata"></audio>
@@ -222,10 +311,23 @@
             nextStory();
         });
 
-        // Интеграция с Telegram
+        function openTab(tabName) {
+            const tabs = document.getElementsByClassName('tab-content');
+            const buttons = document.getElementsByClassName('tab-button');
+            for (let i = 0; i < tabs.length; i++) {
+                tabs[i].classList.remove('active');
+                buttons[i].classList.remove('active');
+            }
+            document.getElementById(tabName).classList.add('active');
+            document.querySelector(`.tab-button[onclick="openTab('${tabName}')"]`).classList.add('active');
+        }
+
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
             window.Telegram.WebApp.expand();
+            setTimeout(() => {
+                window.Telegram.WebApp.expand();
+            }, 100);
         }
     </script>
 </body>
