@@ -12,8 +12,16 @@
             color: white;
             margin: 0;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100vh;
         }
-        button {
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .story-button {
             display: block;
             width: 80%;
             margin: 10px auto;
@@ -24,37 +32,195 @@
             border: none;
             border-radius: 10px;
             cursor: pointer;
+            transition: background-color 0.3s;
         }
-        button:hover {
+        .story-button:hover {
             background-color: #0f3460;
         }
-        audio {
-            margin-top: 20px;
-            width: 80%;
+        .player {
+            background: linear-gradient(135deg, #4a00e0, #8e2de2);
+            padding: 20px;
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            margin: 30px auto;
+            color: white;
+        }
+        .player-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        .player-controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+        }
+        .player-button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.3s;
+        }
+        .player-button:hover {
+            transform: scale(1.1);
+            opacity: 0.8;
+        }
+        .player-button svg {
+            width: 24px;
+            height: 24px;
+        }
+        .play-button svg {
+            width: 32px;
+            height: 32px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 5px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress {
+            width: 0%;
+            height: 100%;
+            background-color: #ffd700;
+            transition: width 0.1s linear;
+        }
+        .time {
+            font-size: 14px;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .up-next {
+            font-size: 14px;
+            margin-top: 10px;
+            color: rgba(255, 255, 255, 0.7);
         }
     </style>
 </head>
 <body>
     <h1>Сказки для сна</h1>
-    <button onclick="playStory('george_camp')">Рассказ Джорджа - Путешествие в лагерь</button>
-    <button onclick="playStory('george_eliza')">Рассказ Джорджа - Элиза</button>
-    <button onclick="playStory('mila_dream')">Рассказ Милы - Маленькая мечта</button>
-    <audio id="player" controls></audio>
+    <button class="story-button" onclick="playStory('george_camp')">Рассказ Джорджа - Путешествие в лагерь</button>
+    <button class="story-button" onclick="playStory('george_eliza')">Рассказ Джорджа - Элиза</button>
+    <button class="story-button" onclick="playStory('mila_dream')">Рассказ Милы - Маленькая мечта</button>
+
+    <div class="player">
+        <div class="player-title" id="current-story">Выберите сказку</div>
+        <div class="player-controls">
+            <button class="player-button" onclick="prevStory()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                    <polygon points="19 20 9 12 19 4 19 20"/>
+                    <line x1="5" y1="4" x2="5" y2="20"/>
+                </svg>
+            </button>
+            <button class="player-button play-button" id="play-pause" onclick="togglePlay()">
+                <svg id="play-icon" viewBox="0 0 24 24" fill="white">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <svg id="pause-icon" viewBox="0 0 24 24" fill="white" style="display: none;">
+                    <rect x="6" y="4" width="4" height="16"/>
+                    <rect x="14" y="4" width="4" height="16"/>
+                </svg>
+            </button>
+            <button class="player-button" onclick="nextStory()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                    <polygon points="5 4 15 12 5 20 5 4"/>
+                    <line x1="19" y1="4" x2="19" y2="20"/>
+                </svg>
+            </button>
+        </div>
+        <div class="progress-bar">
+            <div class="progress" id="progress"></div>
+        </div>
+        <div class="time" id="time">0:00 / 0:00</div>
+        <div class="up-next" id="up-next">Up Next: -</div>
+    </div>
+
+    <audio id="player" preload="metadata"></audio>
 
     <script>
-        const player = document.getElementById('player');
+        const audio = document.getElementById('player');
+        const playPauseBtn = document.getElementById('play-pause');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const progress = document.getElementById('progress');
+        const timeDisplay = document.getElementById('time');
+        const currentStory = document.getElementById('current-story');
+        const upNext = document.getElementById('up-next');
 
-        // Твои ссылки на аудиофайлы
-        const stories = {
+        const stories = [
+            'george_camp',
+            'george_eliza',
+            'mila_dream'
+        ];
+        const storyUrls = {
             'george_camp': 'https://raw.githubusercontent.com/GeorgeBuzeev/TestManya/main/Рассказ Джорджа - Путешествие в лагерь.mp3',
             'george_eliza': 'https://raw.githubusercontent.com/GeorgeBuzeev/TestManya/main/Рассказ Джорджа - Элиза.mp3',
             'mila_dream': 'https://raw.githubusercontent.com/GeorgeBuzeev/TestManya/main/Рассказ Милы - Маленькая мечта.mp3'
         };
 
+        let currentIndex = 0;
+        let isPlaying = false;
+
         function playStory(story) {
-            player.src = stories[story];
-            player.play();
+            currentIndex = stories.indexOf(story);
+            audio.src = storyUrls[story];
+            currentStory.textContent = document.querySelector(`button[onclick="playStory('${story}')"]`).textContent;
+            updateUpNext();
+            audio.play();
+            isPlaying = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
         }
+
+        function togglePlay() {
+            if (isPlaying) {
+                audio.pause();
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+            } else {
+                audio.play();
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+            }
+            isPlaying = !isPlaying;
+        }
+
+        function prevStory() {
+            currentIndex = (currentIndex - 1 + stories.length) % stories.length;
+            playStory(stories[currentIndex]);
+        }
+
+        function nextStory() {
+            currentIndex = (currentIndex + 1) % stories.length;
+            playStory(stories[currentIndex]);
+        }
+
+        function updateUpNext() {
+            const nextIndex = (currentIndex + 1) % stories.length;
+            const nextStoryTitle = document.querySelector(`button[onclick="playStory('${stories[nextIndex]}')"]`).textContent;
+            upNext.textContent = `Up Next: ${nextStoryTitle}`;
+        }
+
+        audio.addEventListener('timeupdate', () => {
+            const current = audio.currentTime;
+            const duration = audio.duration || 0;
+            const progressPercent = (current / duration) * 100;
+            progress.style.width = `${progressPercent}%`;
+
+            const currentMins = Math.floor(current / 60);
+            const currentSecs = Math.floor(current % 60);
+            const durationMins = Math.floor(duration / 60);
+            const durationSecs = Math.floor(duration % 60);
+            timeDisplay.textContent = `${currentMins}:${currentSecs < 10 ? '0' + currentSecs : currentSecs} / ${durationMins}:${durationSecs < 10 ? '0' + durationSecs : durationSecs}`;
+        });
+
+        audio.addEventListener('ended', () => {
+            nextStory();
+        });
 
         // Интеграция с Telegram
         if (window.Telegram && window.Telegram.WebApp) {
