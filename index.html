@@ -1,224 +1,1450 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Сказки для сна — Маня</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #1a1a2e;
-            color: #ffffff;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .header {
-            width: 100%;
-            padding: 20px 0;
-            background-color: #16213e;
-            text-align: center;
-        }
-        h1 {
-            font-size: 24px;
-            margin: 0;
-            color: #e0e0e0;
-        }
-        .content {
-            padding: 20px;
-            width: 90%;
-            max-width: 600px;
-        }
-        .card {
-            background: linear-gradient(135deg, #16213e, #0f3460);
-            border-radius: 15px;
-            margin: 15px 0;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            cursor: pointer;
-            transition: transform 0.3s, background 0.3s;
-        }
-        .card:hover {
-            transform: scale(1.05);
-            background: linear-gradient(135deg, #0f3460, #16213e);
-        }
-        .card-title {
-            font-size: 18px;
-            margin: 0 0 10px 0;
-            color: #fff;
-            display: flex;
-            align-items: center;
-        }
-        .card-icon {
-            font-size: 24px;
-            margin-right: 10px;
-            color: #ffd700;
-        }
-        .player {
-            width: 90%;
-            max-width: 600px;
-            background: linear-gradient(135deg, #16213e, #0f3460);
-            border-radius: 15px;
-            padding: 15px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            margin-top: 20px;
-            opacity: 0;
-            transform: translateY(20px);
-            animation: slideIn 0.5s ease-out forwards;
-        }
-        @keyframes slideIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
+
+# Конфигурация бота и ЮKassa
+#BOT_TOKEN = '7284404713:AAG-5v7UNhuzvQ6_CzNSPCK-1n3Pc33Md2o'
+#SHOP_ID = '448544'  # ID вашего магазина
+#SHOP_API_TOKEN = 'test_Wb2Tfgt1fCNqAtPH6_skmG02D9TqIOTgPwlZkLwEd4o'  # Секретный ключ API
+#"return_url": "https://t.me/spokoinomasha_bot"
+
+import json
+import sqlite3
+import datetime
+import asyncio
+import csv
+import os
+import random
+import requests
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import InputFile
+from yookassa import Configuration, Payment
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils import executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+#from datetime import datetime
+
+# Конфигурация бота и ЮKassa
+BOT_TOKEN = '7950510352:AAGu0Zq5Omakd4ZWIMwKzoyfvNg8i8J3ZQ4'
+SHOP_ID = '448544'
+SHOP_API_TOKEN = 'test_Wb2Tfgt1fCNqAtPH6_skmG02D9TqIOTgPwlZkLwEd4o'
+RETURN_URL = 'https://t.me/Test_masha_test_bot'
+
+# Инициализация бота и диспетчера
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
+
+# Настройка конфигурации ЮKassa
+Configuration.account_id = SHOP_ID
+Configuration.secret_key = SHOP_API_TOKEN
+
+# Подключение к базе данных
+conn = sqlite3.connect('subscriptions1.db')
+cursor = conn.cursor()
+
+# Создание таблицы для пользователей, если она не существует
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    has_subscription BOOLEAN NOT NULL DEFAULT 0,
+    subscription_end DATE,
+    subscription_canceled BOOLEAN NOT NULL DEFAULT 0,
+    purchase_date DATE DEFAULT NULL,
+    renewal_count INTEGER DEFAULT 0,
+    purchased_days INTEGER DEFAULT 0
+)
+''')
+
+# Создание таблицы для пользователей, которые нажали на start
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS start_events (
+        user_id INTEGER,
+        event_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id)
+    )
+''')
+conn.commit()
+
+# Проверяем существующие колонки и добавляем новые, если они отсутствуют
+#Дата покупки подписки (purchase_date)
+#Количество продлений подписки (renewal_count)
+#Количество купленных дней (purchased_days)
+cursor.execute("PRAGMA table_info(users)")
+columns = cursor.fetchall()
+existing_columns = [column[1] for column in columns]
+if 'purchase_date' not in existing_columns:
+    cursor.execute('ALTER TABLE users ADD COLUMN purchase_date DATE DEFAULT NULL')
+if 'renewal_count' not in existing_columns:
+    cursor.execute('ALTER TABLE users ADD COLUMN renewal_count INTEGER DEFAULT 0')
+if 'purchased_days' not in existing_columns:
+    cursor.execute('ALTER TABLE users ADD COLUMN purchased_days INTEGER DEFAULT 0')
+# Добавляем колонку subscription_canceled, если она отсутствует
+if 'subscription_canceled' not in existing_columns:
+    cursor.execute('ALTER TABLE users ADD COLUMN subscription_canceled BOOLEAN NOT NULL DEFAULT 0')
+# Установим значение subscription_canceled для существующих пользователей, если оно отсутствует
+cursor.execute('UPDATE users SET subscription_canceled = 0 WHERE subscription_canceled IS NULL')
+conn.commit()
+
+# Добавляем новые колонки для отслеживания времени завершения каждого дня
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS course_progress (
+        user_id INTEGER PRIMARY KEY,
+        stage INTEGER DEFAULT 0,
+        sleep_difficulty TEXT DEFAULT NULL,
+        sleep_improvement_attempts TEXT DEFAULT NULL,
+        sleep_goal INTEGER DEFAULT NULL,
+        wake_up_time TEXT DEFAULT NULL, 
+        day1_completion_time TIMESTAMP DEFAULT NULL,
+        day2_completion_time TIMESTAMP DEFAULT NULL,
+        day3_completion_time TIMESTAMP DEFAULT NULL
+    )
+''')
+conn.commit()
+
+# Функция для сохранения времени подъема пользователя
+def set_wake_up_time(user_id, wake_up_time):
+    cursor.execute('''
+        UPDATE course_progress SET wake_up_time = ?
+        WHERE user_id = ?
+    ''', (wake_up_time, user_id))
+    conn.commit()
+
+# Создание таблицы для хранения запросов
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS user_requests (
+        user_id INTEGER,
+        request_time TIMESTAMP,
+        PRIMARY KEY (user_id, request_time)
+    )
+''')
+
+# Создание таблицы для отслеживания отправленных файлов
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS sent_files (
+        user_id INTEGER,
+        file_name TEXT,
+        level INTEGER DEFAULT 1,
+        PRIMARY KEY (user_id, file_name)
+    )
+''')
+conn.commit()
+
+# Создаем таблицу для логирования настроений, если её нет
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS mood_log (
+        user_id INTEGER,
+        date DATE,
+        mood TEXT
+    )
+''')
+conn.commit()
+
+# Функция для создания сводки настроений
+def get_mood_summary(user_id, days):
+    """
+    Функция для подсчета частоты выбора каждого настроения за указанный период.
+    Параметры:
+    - user_id: ID пользователя, для которого запрашивается сводка.
+    - days: количество дней, за которые нужно посчитать статистику.
+    Возвращает:
+    - строку с красивым сообщением, содержащим сводку настроений.
+    """
+    # Запрос к базе данных для подсчета количества каждого настроения за указанный период
+    cursor.execute('''
+        SELECT mood, COUNT(mood) as count FROM mood_logs
+        WHERE user_id = ? AND request_time >= datetime('now', ? || ' days')
+        GROUP BY mood
+        ORDER BY count DESC
+    ''', (user_id, -days))
+
+    # Получаем результат запроса
+    results = cursor.fetchall()
+
+    # Формируем ответное сообщение
+    if results:
+        summary = f"Тренд настроений за последние {days} дней:\n\n"
+        for mood, count in results:
+            summary += f"{mood}: {count} раз(а)\n"
+        return summary
+    else:
+        return "За этот период нет данных о настроениях."
+
+# Функция для создания платежа с различными значениями
+def create_payment(value, description):
+    try:
+        payment = Payment.create({
+            "amount": {
+                "value": value,
+                "currency": "RUB"
+            },
+            "payment_method_data": {
+                "type": "bank_card"
+            },
+            "confirmation": {
+                "type": "redirect",
+                "return_url": RETURN_URL
+            },
+            "capture": True,
+            "description": description,
+            "receipt": {
+                "customer": {
+                    "email": "gowaone1@gmail.com"  # или телефон, например "phone": "+79000000000"
+                },
+                "items": [
+                    {
+                        "description": description,
+                        "quantity": "1.00",  # Количество
+                        "amount": {
+                            "value": value,
+                            "currency": "RUB"
+                        },
+                        "vat_code": "1",  # НДС 20%
+                        "payment_mode": "full_payment",  # Режим оплаты
+                        "payment_subject": "service"  # Вид товара или услуги
+                    }
+                ]
             }
-        }
-        .player.hidden {
-            display: none;
-        }
-        .track-title {
-            font-size: 16px;
-            margin-bottom: 10px;
-            color: #e0e0e0;
-            text-align: center;
-        }
-        .controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-        }
-        .control-btn {
-            background: none;
-            border: none;
-            color: #ffd700;
-            font-size: 24px;
-            cursor: pointer;
-            padding: 10px;
-            transition: color 0.3s;
-        }
-        .control-btn:hover {
-            color: #ffeb3b;
-        }
-        #progress {
-            width: 100%;
-            height: 5px;
-            background-color: #333;
-            border-radius: 5px;
-            margin-top: 10px;
-            cursor: pointer;
-        }
-        #progress-bar {
-            height: 100%;
-            background-color: #ffd700;
-            border-radius: 5px;
-            width: 0;
-            transition: width 0.1s linear;
-        }
-        audio {
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>Сказки для сна с Маней</h1>
-    </div>
-    <div class="content">
-        <div class="card" onclick="playAudio('story1')">
-            <div class="card-title"><span class="card-icon">🌙</span> Рассказ Джорджа - Путешествие в лагерь</div>
-        </div>
-        <div class="card" onclick="playAudio('story2')">
-            <div class="card-title"><span class="card-icon">🌟</span> Рассказ Милы - Маленькая мечта</div>
-        </div>
-        <div class="card" onclick="playAudio('story3')">
-            <div class="card-title"><span class="card-icon">✨</span> Рассказ Джорджа - Элиза</div>
-        </div>
-    </div>
-    <div id="player" class="player hidden">
-        <div class="track-title" id="trackTitle"></div>
-        <div class="controls">
-            <button class="control-btn" onclick="togglePlayPause()">⏸</button>
-            <button class="control-btn" onclick="togglePlayPause()">▶</button>
-        </div>
-        <div id="progress">
-            <div id="progress-bar"></div>
-        </div>
-    </div>
-    <audio id="audio" preload="auto"></audio>
+        })
+        return json.loads(payment.json())
+    except Exception as e:
+        print(f"Ошибка при создании платежа: {str(e)}")
+        return None
 
-    <script>
-        const audioFiles = {
-            'story1': 'https://drive.google.com/uc?export=download&id=1q5YdrVzprzeVlC5kXvTCp9jFg6pV14TL',
-            'story2': 'https://drive.google.com/uc?export=download&id=1eGSlHZOHMeIK56HC5-EqFv63cocUNhFL',
-            'story3': 'https://drive.google.com/uc?export=download&id=1iMCJlLZ9gfTyDwkBKXUEVnwQli-Tsn8T'
-        };
+# Асинхронная функция для проверки статуса платежа
+async def check_payment(payment_id, max_attempts=20, delay=10):
+    try:
+        attempts = 0
+        while attempts < max_attempts:
+            attempts += 1
+            payment = Payment.find_one(payment_id)
+            payment_data = json.loads(payment.json())
 
-        let currentAudio = null;
-        const player = document.getElementById('player');
-        const audio = document.getElementById('audio');
-        const trackTitle = document.getElementById('trackTitle');
-        const progress = document.getElementById('progress');
-        const progressBar = document.getElementById('progress-bar');
-        let isPlaying = false;
+            if payment_data['status'] == 'succeeded':
+                return True
+            elif payment_data['status'] == 'canceled':
+                return False
 
-        function playAudio(storyId) {
-            if (currentAudio === storyId) {
-                togglePlayPause();
-                return;
-            }
-            currentAudio = storyId;
-            audio.src = audioFiles[storyId];
-            trackTitle.textContent = `Сейчас играет: ${storyId.split('_')[1].replace(/-/g, ' ')}`;
-            player.classList.remove('hidden');
-            audio.play().then(() => {
-                isPlaying = true;
-                updateControls();
-            }).catch(error => console.error('Ошибка воспроизведения:', error));
-            audio.onended = () => {
-                isPlaying = false;
-                updateControls();
-            };
-        }
+            await asyncio.sleep(delay)
 
-        function togglePlayPause() {
-            if (isPlaying) {
-                audio.pause();
-                isPlaying = false;
-            } else {
-                audio.play().then(() => {
-                    isPlaying = true;
-                }).catch(error => console.error('Ошибка воспроизведения:', error));
-            }
-            updateControls();
-        }
+        return False
+    except Exception as e:
+        print(f"Ошибка при проверке платежа: {str(e)}")
+        return False
 
-        function updateControls() {
-            const playBtn = player.querySelector('button:nth-child(2)');
-            const pauseBtn = player.querySelector('button:nth-child(1)');
-            if (isPlaying) {
-                playBtn.style.display = 'none';
-                pauseBtn.style.display = 'block';
-            } else {
-                playBtn.style.display = 'block';
-                pauseBtn.style.display = 'none';
-            }
-        }
+# Функция для обновления статуса подписки
+def update_subscription_status(user_id, status, days=7, cancel=False):
+    end_date = None
+    purchase_date = None
+    renewal_count = 0  # Начальное значение для нового пользователя
+    purchased_days = days  # Количество купленных дней
 
-        audio.ontimeupdate = () => {
-            const progressPercent = (audio.currentTime / audio.duration) * 100;
-            progressBar.style.width = `${progressPercent}%`;
-        };
+    if status:  # Если подписка активна
+        end_date = (datetime.datetime.now() + datetime.timedelta(days=days)).date()
+        purchase_date = datetime.datetime.now().date()
 
-        progress.addEventListener('click', (e) => {
-            const rect = progress.getBoundingClientRect();
-            const clickPosition = e.clientX - rect.left;
-            const progressWidth = rect.width;
-            const newTime = (clickPosition / progressWidth) * audio.duration;
-            audio.currentTime = newTime;
-        });
-    </script>
-</body>
-</html>
+        # Проверяем, существует ли пользователь в базе данных
+        cursor.execute('SELECT renewal_count, subscription_end FROM users WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+
+        if result:  # Если пользователь уже существует
+            renewal_count = result[0] + 1  # Увеличиваем счетчик продлений
+            existing_end_date_str = result[1]
+            if existing_end_date_str:
+                existing_end_date = datetime.datetime.strptime(existing_end_date_str, '%Y-%m-%d').date()
+                # Обновляем дату окончания на максимальную из двух дат
+                new_end_date = max(existing_end_date, end_date)
+            else:
+                new_end_date = end_date
+
+            cursor.execute('''
+                UPDATE users 
+                SET has_subscription = ?, 
+                    subscription_end = ?, 
+                    purchase_date = ?, 
+                    renewal_count = ?, 
+                    purchased_days = purchased_days + ? 
+                WHERE user_id = ?
+            ''', (status, new_end_date, purchase_date, renewal_count, days, user_id))
+        else:  # Если пользователь новый
+            cursor.execute('''
+                INSERT INTO users (user_id, has_subscription, subscription_end, purchase_date, renewal_count, purchased_days)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, status, end_date, purchase_date, renewal_count, purchased_days))
+    else:  # Если подписка отменена
+        cursor.execute('''
+            UPDATE users 
+            SET subscription_canceled = 1 -- Устанавливаем флаг отмены подписки
+            WHERE user_id = ?
+        ''', (user_id,))
+
+    conn.commit()
+
+#Логика проверки статуса подписки:
+def get_subscription_status(user_id):
+    cursor.execute('SELECT has_subscription, subscription_end, subscription_canceled FROM users WHERE user_id = ?',
+                   (user_id,))
+    result = cursor.fetchone()
+    if result:
+        has_subscription, end_date_str, canceled = result
+        end_date = None
+        if end_date_str:
+            end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        # Если подписка отменена и дата окончания не прошла
+        if canceled and end_date and datetime.datetime.now().date() > end_date:
+            return False, None
+        if has_subscription and end_date and datetime.datetime.now().date() <= end_date:
+            return True, end_date
+    return False, None
+
+def get_subscription_info(user_id):
+    has_subscription, end_date = get_subscription_status(user_id)
+    if has_subscription:
+        days_remaining = (end_date - datetime.datetime.now().date()).days
+        return f"Ваша премиум доступ активен. До окончания доступа осталось {days_remaining} дней."
+    else:
+        return "Ваша премиум доступ не активен."
+
+#Обновление логики обработки подписки и продлений
+def renew_subscription(user_id, additional_days):
+    cursor.execute('SELECT renewal_count, subscription_end FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+
+    if result:
+        renewal_count, end_date_str = result
+        new_renewal_count = renewal_count + 1
+        # Рассчитываем новую дату окончания подписки
+        if end_date_str:
+            new_end_date = datetime.datetime.strptime(end_date_str, '%Y-%m-%d').date() + datetime.timedelta(
+                days=additional_days)
+        else:
+            new_end_date = (datetime.datetime.now() + datetime.timedelta(days=additional_days)).date()
+        # Обновляем данные о подписке
+        cursor.execute('''
+            UPDATE users 
+            SET subscription_end = ?, 
+                renewal_count = ?, 
+                purchased_days = purchased_days + ?
+            WHERE user_id = ?
+        ''', (new_end_date, new_renewal_count, additional_days, user_id))
+        conn.commit()
+
+# Функция для проверки лимита запросов
+def check_request_limit(user_id):
+    ten_hours_ago = datetime.datetime.now() - datetime.timedelta(hours=10)
+    cursor.execute('''
+        SELECT COUNT(*) FROM user_requests
+        WHERE user_id = ? AND request_time > ?
+    ''', (user_id, ten_hours_ago))
+    count = cursor.fetchone()[0]
+    return count < 3
+
+# Функция для записи запроса
+def log_request(user_id):
+    cursor.execute('''
+        INSERT INTO user_requests (user_id, request_time)
+        VALUES (?, ?)
+    ''', (user_id, datetime.datetime.now()))
+    conn.commit()
+
+# ************************************ Добавляем функции для работы с уровнями ***********************************************
+
+# Function to get the user's level
+def get_level(user_id):
+    cursor.execute('SELECT MAX(level) FROM sent_files WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()[0]
+    return result if result else 1  # По умолчанию уровень 1
+
+def listens_needed_for_next_level(level):
+    return 2 ** level  # Геометрическая прогрессия: 1, 2, 4, 8, ...
+
+# Function to update user level
+def log_sent_file(user_id, file_name):
+    cursor.execute('SELECT COUNT(*) FROM sent_files WHERE user_id = ? AND file_name = ?', (user_id, file_name))
+    exists = cursor.fetchone()[0]
+    if not exists:
+        cursor.execute('INSERT INTO sent_files (user_id, file_name, level) VALUES (?, ?, ?)', (user_id, file_name, 1))
+        conn.commit()
+        print(f"[DEBUG] Новый файл {file_name} записан для пользователя {user_id}")
+        update_level(user_id)  # Обновляем уровень пользователя
+    else:
+        print(f"[DEBUG] Файл {file_name} уже был отправлен пользователю {user_id}")
+
+def update_level(user_id):
+    # Получаем текущий уровень пользователя и количество отправленных файлов
+    cursor.execute('SELECT level, sent_files_count FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    current_level = result[0] if result else 1  # По умолчанию уровень 1
+    sent_files_count = result[1] if result else 0  # По умолчанию 0
+
+    # Определяем, сколько прослушиваний нужно для следующего уровня
+    listens_needed = listens_needed_for_next_level(current_level)
+
+    # Если пользователь прослушал достаточно файлов, повышаем уровень
+    if sent_files_count >= listens_needed:
+        new_level = current_level + 1
+        cursor.execute('UPDATE users SET level = ? WHERE user_id = ?', (new_level, user_id))
+        conn.commit()
+        print(f"[DEBUG] Уровень пользователя {user_id} обновлен до {new_level}")
+    else:
+        print(f"[DEBUG] Уровень пользователя {user_id} остается {current_level}")
+    # Получаем текущий уровень пользователя и количество отправленных файлов
+    cursor.execute('SELECT level, sent_files_count FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    current_level = result[0] if result else 1  # По умолчанию уровень 1
+    sent_files_count = result[1] if result else 0  # По умолчанию 0
+
+    # Определяем, сколько прослушиваний нужно для следующего уровня
+    listens_needed = listens_needed_for_next_level(current_level)
+
+    # Если пользователь прослушал достаточно файлов, повышаем уровень
+    if sent_files_count >= listens_needed:
+        new_level = current_level + 1
+        cursor.execute('UPDATE users SET level = ? WHERE user_id = ?', (new_level, user_id))
+        conn.commit()
+        print(f"[DEBUG] Уровень пользователя {user_id} обновлен до {new_level}")
+    else:
+        print(f"[DEBUG] Уровень пользователя {user_id} остается {current_level}")
+
+# *********************************************** Конец блока с функциями для работы с уровнями *************************
+
+# Функция для получения списка отправленных файлов
+def get_sent_files(user_id):
+    cursor.execute('SELECT file_name FROM sent_files WHERE user_id = ?', (user_id,))
+    return [row[0] for row in cursor.fetchall()]
+
+# Функция для записи отправленного файла
+def log_sent_file(user_id, file_name):
+    cursor.execute('SELECT COUNT(*) FROM sent_files WHERE user_id = ? AND file_name = ?', (user_id, file_name))
+    exists = cursor.fetchone()[0]
+    if not exists:
+        # Логируем отправленный файл
+        cursor.execute('INSERT INTO sent_files (user_id, file_name) VALUES (?, ?)', (user_id, file_name))
+        # Увеличиваем счётчик отправленных файлов
+        cursor.execute('''
+            UPDATE users 
+            SET sent_files_count = sent_files_count + 1 
+            WHERE user_id = ?
+        ''', (user_id,))
+        conn.commit()
+        print(f"[DEBUG] Новый файл {file_name} записан для пользователя {user_id}")
+        update_level(user_id)  # Обновляем уровень пользователя
+    else:
+        print(f"[DEBUG] Файл {file_name} уже был отправлен пользователю {user_id}")
+
+# Функция для выбора случайного MP3 файла, исключая уже отправленные
+def get_random_mp3_file(directory, user_id):
+    all_files = [f for f in os.listdir(directory) if f.lower().endswith('.mp3')]
+    if not all_files:
+        return None  # Если нет файлов в папке, возвращаем None
+
+    # Получаем список уже отправленных файлов пользователю
+    cursor.execute('SELECT file_name FROM sent_files WHERE user_id = ?', (user_id,))
+    sent_files = [row[0] for row in cursor.fetchall()]
+
+    # Если все файлы были отправлены, очищаем историю отправленных файлов
+    #if len(sent_files) == len(all_files):
+    #    cursor.execute('DELETE FROM sent_files WHERE user_id = ?', (user_id,))
+    #    conn.commit()
+    #    sent_files = []  # Очистили историю, теперь можно выбирать файлы снова
+
+    # Исключаем уже отправленные файлы
+    available_files = [f for f in all_files if f not in sent_files]
+    if not available_files:
+        return None  # Если после очистки снова нет доступных файлов, возвращаем None
+
+    # Выбираем случайный файл из оставшихся
+    selected_file = random.choice(available_files)
+    file_path = os.path.join(directory, selected_file)
+    log_sent_file(user_id, selected_file)  # Логируем отправку файла и обновляем уровень
+    return file_path
+
+# Главное меню
+async def send_permanent_menu(message: types.Message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.row("🌙Быстрее заснуть", "💤Особый раздел для сна")
+    markup.row("👤Профиль")
+    await message.answer("Вы в главном меню, выберите раздел:", reply_markup=markup)
+
+# Обработчик команды /start
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    user_id = message.from_user.id
+    try:
+        # Добавляем пользователя в таблицу, если его еще нет
+        cursor.execute('''
+            INSERT OR IGNORE INTO start_events (user_id) VALUES (?)
+        ''', (user_id,))
+        conn.commit()
+    except Exception as e:
+        print(f"Ошибка при записи события /start: {e}")
+    await message.answer("🙋‍♀️ <b>Добро пожаловать!</b>\n"
+                         "Я Маня — ваш личный помощник для хорошего сна", parse_mode='HTML')
+    await message.answer("<b>Советую начать с первого раздела</b>\n"
+                         "🌙<u>Быстрее заснуть</u> - отлично подойдет для нашего знакомства! Я пришлю несколько бесплатных рассказов и полезные материалы, чтобы быстрее заснуть.\n"
+                         "💤<u>Особый раздел для сна</u> - в этом разделе можно найти курс, который поможет настроить здоровый сон.\nА еще много новых рассказов, которые помогают справляться со стрессом, тревогами и эмоциональным напряжением перед сном.\n\n"
+                         "Приятного пользования! 💜", parse_mode='HTML')
+    await send_permanent_menu(message)
+
+# Обработчик перехода в главное меню
+@dp.message_handler(lambda message: message.text == "🏠Главное меню")
+async def return_to_main_menu(message: types.Message):
+    await send_permanent_menu(message)
+
+# Обработчик 💤Особый раздел для сна
+@dp.message_handler(lambda message: message.text == "💤Особый раздел для сна")
+async def send_permanent_menu_for_sleep(message: types.Message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("🎧Послушать сказки для сна", "📚Пройти sleep комплекс")
+    markup.add("🏠Главное меню")
+    await message.answer("В этом особом разделе можно выбрать:\n\n"
+                         "*🎧Сказки для сна* - я пришлю уникальную историю перед сном\n"
+                         "*📚Sleep комплекс* - вместе с создателем, Джорджем, я проведу вас к лучшему сну за несколько дней", reply_markup=markup, parse_mode="Markdown")
+
+# Обработчик кнопки "🌙Быстрее заснуть"
+@dp.message_handler(lambda message: message.text == "🌙Быстрее заснуть")
+async def free_stories(message: types.Message):
+    # Текст сообщения
+    text = (
+        "🎧 Представляете, более *1 миллиона человек* слушают рассказы перед сном.\n\n"
+        "Мои создатели пошли дальше! Внедрили в рассказы элементы медитации: дыхательные практики, которые вплетены в сюжет.\n\n"
+        "Теперь вы дышите вместе с героями, расслабляетесь и засыпаете быстрее. Подходит и взрослым, и детям.\n\n"
+        "👇 Выберите рассказ, включите аудио и отдыхайте. К аудио я приложу полезный материал бесплатно."
+    )
+    # Создаем inline-кнопки
+    markup = InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        InlineKeyboardButton("Рассказ Джорджа - Путешествие в лагерь", callback_data="story_1"),
+        InlineKeyboardButton("Рассказ Милы - Маленькая мечта", callback_data="story_2"),
+        InlineKeyboardButton("Рассказ Джорджа - Элиза", callback_data="story_3")
+    )
+    # Отправляем сообщение с кнопками
+    await message.answer(text, parse_mode="Markdown", reply_markup=markup)
+
+# Обработчик inline-кнопок
+@dp.callback_query_handler(lambda callback: callback.data.startswith("story_"))
+async def send_story(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    story_id = callback.data
+    # Определяем, какой файл отправить и какую подпись использовать
+    if story_id == "story_1":
+        file_path = "free/Рассказ Джорджа - Путешествие в лагерь.mp3"
+        story_name = "☝️Нажмите, чтобы послушать рассказ на ночь от Джорджа - Путешествие в лагерь"
+        caption = (
+            f"*{story_name}*\n\n"
+            "На всякий случай, я добавила ссылку на статью о пользе сказкотерапии для взрослых. Чтение займет всего пару минут.\n"
+            "Приятного прослушивания и сладких снов! 😊\n\n"
+            "📚[Прочитать о пользе сказкотерапии](https://www.netoropis.ru/posts/Fairy-tale-therapy)\n\n"
+            "А если вам понравилось, больше специальных сказок можно найти в *Особом разделе для сна💤*"
+        )
+    elif story_id == "story_2":
+        file_path = "free/Рассказ Милы - Маленькая мечта.mp3"
+        story_name = "☝️Нажмите, чтобы начать слушать. Рассказ на ночь от Милы - Маленькая мечта"
+        caption = (
+            f"*{story_name}*\n\n"
+            "К этому рассказу я добавила ссылку на статью о том, как мы отодвигаем сон, потому что это единственный способ посвятить время себе. Буду рада, когда почитаете\n"
+            "Приятного прослушивания и сладких снов! 😊\n\n"
+            "📚[Прочитать о причинах прокрастинации в ущерб сну](https://www.netoropis.ru/posts/Procrastination-at-the-expense-of-sleep)\n\n"
+            "А если вам понравилось, больше специальных сказок можно найти в *Особом разделе для сна💤*"
+        )
+    elif story_id == "story_3":
+        file_path = "free/Рассказ Джорджа - Элиза.mp3"
+        story_name = "☝️Нажмите, чтобы начать слушать. Рассказ на ночь от Джорджа - Элиза"
+        caption = (
+            f"*{story_name}*\n\n"
+            "К этому рассказу я добавила ссылку на статью о спорте перед сном. Полезно или вредно? Буду рада, когда почитаете\n"
+            "Приятного прослушивания и сладких снов! 😊\n\n"
+            "📚[Прочитать о спорте перед сном. Разминаемся](https://www.netoropis.ru/posts/Sports-before-bed)\n\n"
+            "А если вам понравилось, больше специальных сказок можно найти в *Особом разделе для сна💤*"
+        )
+
+    # Отправляем аудиофайл с текстом
+    with open(file_path, "rb") as audio:
+        await callback.message.answer_audio(
+            audio,
+            caption=caption,
+            parse_mode="Markdown"
+        )
+
+    # Логируем отправку файла и обновляем уровень
+    filename = os.path.basename(file_path)  # Получаем имя файла из пути
+    log_sent_file(user_id, filename)
+    # Закрываем callback (убираем "часики" на кнопке)
+    await callback.answer()
+
+# Обработчик для проверки подписки и предложения ее покупки
+@dp.message_handler(lambda message: message.text in ["🎧Послушать сказки для сна", "📚Пройти sleep комплекс"])
+async def handle_subscription(message: types.Message):
+    status, _ = get_subscription_status(message.from_user.id)
+    if not status:
+        # Добавляем инлайн-кнопку "Прочитать про премиум доступ"
+        inline_markup = types.InlineKeyboardMarkup()
+        inline_markup.add(
+            types.InlineKeyboardButton(text="Прочитать про премиум доступ", url="https://www.netoropis.ru/")
+        )
+        # Отправляем сообщение о премиум доступе с прикрепленной кнопкой
+        await message.answer(
+            "<b>Спокойный сон — без усилий</b>\n"
+            "Премиум-доступ к боту Мане — это не просто сказки, а ваш инструмент для лёгкого засыпания, глубокого сна и спокойного утра\n\n"
+            "🎯 <b>Что вы получите?</b>\n"
+            "• Подготовитесь к лучшему отдыху благодаря уникальным историям с эффектом медитации, озвученным известными голосами\n"
+            "• Проследите за вашим настроением, каждый вечер, перед сном\n"
+            "• А еще - создание и озвучка персональных историй по запросу, превращая ваши мечты в реальность!", parse_mode='HTML')
+        await message.answer(
+            "<b>🌟 Тарифы на выбор:</b>\n"
+            "• На 30 дней - 450 рублей\n"
+            "• На 365 дней + 30 дней бесплатно 🎁 - 3600 рублей\n"
+            "<u>Экономия 39%! Это всего 276 рублей в месяц!</u> "
+            "Дешевле капучинки", parse_mode='HTML', reply_markup=inline_markup)
+        # Кнопки с выбором типа подписки, организованные в 2 столбика и 2 строки
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        markup.row("Оформить доступ на 30 дней", "Оформить доступ на 365+30 дней")
+        markup.row("🏠Главное меню")
+        await message.answer(
+            "Это разовый доступ, а не подписка. Автопродление отключено у всех пользователей и деньги не спишутся в крайний день.",
+            reply_markup=markup)
+    else:
+        # Если подписка активна, продолжаем как обычно
+        if message.text == "📚Пройти sleep комплекс":
+            await start_sleep_course(message)
+        elif message.text == "🎧Послушать сказки для сна":
+            await send_sleep_stories(message)
+
+#Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна
+@dp.message_handler(lambda message: message.text == "🎧Послушать сказки для сна")
+async def send_sleep_stories(message: types.Message):
+    status, _ = get_subscription_status(message.from_user.id)
+    if not status:
+        await handle_subscription(message)
+    else:
+        # Сценарий выбора настроения
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        markup.add("💭Много мыслей", "🌵Стресс", "🕯️Переживаю")
+        markup.add("🏠Главное меню")
+        await message.answer("💁‍♀️Выберите ваше настроение и я пришлю сказку:", reply_markup=markup)
+
+@dp.message_handler(lambda message: message.text in ["💭Много мыслей", "🌵Стресс", "🕯️Переживаю", "🏠Главное меню"])
+async def send_material_based_on_mood(message: types.Message):
+    if message.text == "🏠Главное меню":
+        return
+
+    # Логируем настроение перед отправкой истории
+    mood = message.text
+    user_id = message.from_user.id
+    date = datetime.datetime.now().date()
+    cursor.execute('INSERT INTO mood_log (user_id, date, mood) VALUES (?, ?, ?)', (user_id, date, mood))
+    conn.commit()
+
+    directory = os.path.join(os.getcwd(), 'stories')  # Указываем путь к папке 'stories' относительно текущей директории
+    file_path = get_random_mp3_file(directory, user_id)
+    if file_path:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        markup.add("💭Много мыслей", "🌵Стресс", "🕯️Переживаю")
+        markup.add("🏠Главное меню")  # Добавляем кнопку "Главное меню"
+
+        # Получаем случайное изображение
+        image_path = get_random_image_file('sleep_images')  # Папка с изображениями
+        file_name_without_extension = os.path.splitext(os.path.basename(file_path))[0]  # Имя файла без расширения
+
+        # Формируем текст сообщения
+        caption_text = (
+            "💁‍♀️Рассказы перед сном — это отдых и снижение стресса\n\n"
+            f"Название: *{file_name_without_extension}*.\nНе забудьте настроить громкость перед прослушиванием!"
+        )
+
+        if image_path:
+            # Отправляем сообщение с текстом и прикреплённой картинкой
+            with open(image_path, 'rb') as image_file:
+                await message.answer_photo(
+                    photo=image_file,
+                    caption=caption_text,
+                    parse_mode='Markdown',
+                    reply_markup=markup
+                )
+        else:
+            # Если нет изображения, просто отправляем текст
+            await message.answer(caption_text, parse_mode='Markdown', reply_markup=markup)
+
+        # Отправляем MP3 файл
+        await message.answer_audio(audio=types.InputFile(file_path))
+        log_sent_file(user_id, os.path.basename(file_path))  # Логируем отправку файла
+        log_request(user_id)
+    else:
+        await message.answer("Извините, но в папке нет MP3 файлов.")
+
+# Функция для получения случайного изображения из указанной директории
+def get_random_image_file(directory):
+    """Функция для получения случайного изображения из указанной директории."""
+    all_images = [f for f in os.listdir(directory) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    if all_images:
+        return os.path.join(directory, random.choice(all_images))
+    return None
+
+#Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна #Истории для сна
+
+
+
+##############################################################################################################
+
+#Теперь update_course_stage будет обновлять отдельные временные метки для каждого дня:
+def update_course_stage(user_id, stage, completed=False, day=None, sleep_difficulty=None, sleep_improvement_attempts=None):
+    completion_time = datetime.datetime.now() if completed else None
+    try:
+        if sleep_difficulty:
+            cursor.execute('UPDATE course_progress SET stage = ?, sleep_difficulty = ? WHERE user_id = ?', (stage, sleep_difficulty, user_id))
+        elif sleep_improvement_attempts:
+            cursor.execute('UPDATE course_progress SET stage = ?, sleep_improvement_attempts = ? WHERE user_id = ?', (stage, sleep_improvement_attempts, user_id))
+        elif day == 1:
+            cursor.execute('UPDATE course_progress SET stage = ?, day1_completion_time = ? WHERE user_id = ?', (stage, completion_time, user_id))
+        elif day == 2:
+            cursor.execute('UPDATE course_progress SET stage = ?, day2_completion_time = ? WHERE user_id = ?', (stage, completion_time, user_id))
+        elif day == 3:
+            cursor.execute('UPDATE course_progress SET stage = ?, day3_completion_time = ? WHERE user_id = ?', (stage, completion_time, user_id))
+        else:
+            cursor.execute('UPDATE course_progress SET stage = ? WHERE user_id = ?', (stage, user_id))
+        conn.commit()
+        print(f"[DEBUG] Статус обновлен для пользователя {user_id}: этап {stage}, день {day}, завершено={completed}")
+        # Добавьте отладочный запрос для проверки записи в базе данных
+        cursor.execute('SELECT * FROM course_progress WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+    except Exception as e:
+        print(f"Ошибка при обновлении статуса: {str(e)}")
+
+# Функция для получения текущего этапа курса
+def get_course_stage(user_id):
+    cursor.execute('SELECT stage FROM course_progress WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    if result:
+        return result[0]  # Возвращаем только значение stage как целое число
+    else:
+        cursor.execute('INSERT INTO course_progress (user_id, stage) VALUES (?, ?)', (user_id, 0))
+        conn.commit()
+        return 0  # Возвращаем 0 как начальный этап
+
+# Функция для проверки возможности перехода к следующему дню
+def can_access_next_day(user_id, day, force_next_day=False):
+    if force_next_day:
+        return True  # Игнорируем проверку времени, если пользователь нажал "Начать следующий день комплекса"
+    # Остальная логика проверки времени (как в вашем коде)
+    column = {
+        "day1": "day1_completion_time",
+        "day2": "day2_completion_time",
+        "day3": "day3_completion_time"
+    }.get(day)
+    if not column:
+        print(f"[DEBUG] Invalid day argument: {day}")
+        return False
+    cursor.execute(f'SELECT {column} FROM course_progress WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    if result and result[0]:
+        last_completion_time = datetime.datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S.%f")
+        time_since_completion = (datetime.datetime.now() - last_completion_time).total_seconds()
+        can_access = time_since_completion >= 12 * 60 * 60  # 12 часов
+        print(f"[DEBUG] Time since last completion: {time_since_completion} seconds. Can access next day: {can_access}")
+        return can_access
+    print("[DEBUG] No completion time found, cannot access next day yet.")
+    return False
+
+# Этап 0: Приветственное сообщение и кнопка "Начать"
+async def stage_0_welcome(message: types.Message):
+    await message.answer("💁‍♀️ Добро пожаловать на 3-х дневный комплекс для сна!")
+    await message.answer("Если у вас есть хронические заболевания, пожалуйста, проконсультируйтесь со специалистом.\n\nВ этом комплексе, за 3 вечера мой создатель Джордж расскажет вам:\n"
+                         "• Что такое сон и как его улучшить,\n"
+                         "• Расскажет специальную историю для сна с элементами медитации.")
+    # Кнопка для перехода к этапу 1
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Начать")
+    await message.answer("Когда будете готовы, нажмите 'Начать' для продолжения", reply_markup=markup)
+    update_course_stage(message.from_user.id, 1)
+
+# Этап 1: Опрос о продолжительности сна
+async def stage_1_sleep_duration(message: types.Message):
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Трудности с засыпанием", "Частые пробуждения")
+    markup.add("Ранние пробуждения", "Нет чувства отдыха после сна")
+    await message.answer("💁‍♀️ Давайте разберемся, что именно мешает вашему сну.\n\n<b>Какая самая большая трудность со сном беспокоит вас прямо сейчас?</b>", parse_mode='HTML', reply_markup=markup)
+    update_course_stage(message.from_user.id, 2)
+
+# Обработчик ответа на вопрос о трудностях со сном
+@dp.message_handler(lambda message: message.text in ["Трудности с засыпанием", "Частые пробуждения", "Ранние пробуждения", "Нет чувства отдыха после сна"])
+async def handle_sleep_difficulties(message: types.Message):
+    user_id = message.from_user.id
+    difficulty = message.text
+    # Сохраняем ответ в базу данных
+    cursor.execute('UPDATE course_progress SET sleep_difficulty = ? WHERE user_id = ?', (difficulty, user_id))
+    conn.commit()
+    await stage_2_set_sleep_goal(message)
+
+# Этап 2: ответа на вопрос о попытках улучшить сон
+async def stage_2_set_sleep_goal(message: types.Message):
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("Медитация", "Теплая ванна", "Чтение", "Ничего не пробовал")
+    await message.answer("💁‍♀️ Поняла, спасибо за ответ!\n\n<b>Что вы уже пробовали, чтобы улучшить сон, и почему это не сработало?</b>", parse_mode='HTML', reply_markup=markup)
+    update_course_stage(message.from_user.id, 3)
+
+# Обработчик ответа на вопрос о попытках улучшить сон
+@dp.message_handler(lambda message: message.text in ["Медитация", "Теплая ванна", "Чтение", "Ничего не пробовал"])
+async def handle_sleep_attempts(message: types.Message):
+    user_id = message.from_user.id
+    attempt = message.text
+    # Сохраняем ответ в базу данных
+    cursor.execute('UPDATE course_progress SET sleep_improvement_attempts = ? WHERE user_id = ?', (attempt, user_id))
+    conn.commit()
+    await stage_3_relaxation(message)
+
+# Этап 3: Техника расслабления
+async def stage_3_relaxation(message: types.Message):
+    await message.answer("<b>В первый день мы рассмотрим:</b>\n"
+                         "• Что такое сон?\n"
+                         "• Почему качественный сон так важен?\n"
+                         "• Сказки для взрослых тоже полезны?", parse_mode='HTML')
+    # Добавляем кнопку "Продолжить"
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Продолжить")
+    await message.answer("Чтобы комплекс действительно помог, пожалуйста, займите удобное положение и приготовьтесь ко сну.\n\n"
+                         "Когда будете готовы, нажмите на кнопку 'Продолжить', я пришлю первое аудио", reply_markup=markup)
+
+# Этап 4: Отправка аудиофайла с историей для сна
+async def stage_4_story(message: types.Message):
+    user_id = message.from_user.id
+    # Указываем конкретный файл для отправки
+    file_path = "sleep_complex/Первый день комплекса.mp3"
+    # Проверяем, существует ли файл
+    if os.path.exists(file_path):
+        # Отправляем аудиофайл
+        await message.answer_audio(audio=InputFile(file_path))
+    else:
+        await message.answer("К сожалению, файл не найден. Пожалуйста, попробуйте позже.")
+    # Создаем встроенную кнопку со ссылкой
+    inline_markup = InlineKeyboardMarkup()
+    inline_markup.add(
+        InlineKeyboardButton(text="Прочитать текст 1 дня", url="https://www.netoropis.ru/posts/1DayMasha")
+    )
+    await message.answer(
+        "💁‍♀️ Прислала аудио файл выше.\nОзвучивает один из моих создателей — Джордж.\n\n"
+        "Рекомендую занять удобное положение и послушать, чтобы было полное погружение перед сном. Но если неудобно слушать — можно прочитать, нажав на кнопочку под этим сообщением:",
+        reply_markup=inline_markup
+    )
+    # Завершающее сообщение с переходом в главное меню и кнопкой "Начать следующий день комплекса"
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("🏠Главное меню", "Начать следующий день комплекса")
+    await message.answer(
+        "Послушать другие сказки можно в разделе '💤Особый раздел для сна' через главное меню 😉\n\n"
+        "А пока первый день завершен! Приходите завтра перед сном, расскажу новую сказку!\n\n"
+        "Доброй ночи и приятных снов!\n-Маня",
+        reply_markup=markup
+    )
+    # Обновляем этап прохождения курса
+    update_course_stage(user_id, 5, completed=True, day=1)
+
+# Этап 5: Проверка на доступность следующего дня
+async def stage_5_check_next_day(message: types.Message):
+    if can_access_next_day(message.from_user.id, "day1"):
+        await stage_6_wake_up_time(message)
+    else:
+        await message.answer("День 2 будет доступен через 12 часов. Возвращайтесь позже!")
+
+# Этап 6: Приветственное сообщение и выбор времени подъема
+async def stage_6_wake_up_time(message: types.Message):
+    user_id = message.from_user.id
+    # Получаем сохраненные данные о трудностях и попытках
+    cursor.execute('SELECT sleep_difficulty, sleep_improvement_attempts FROM course_progress WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    sleep_difficulty, sleep_attempt = result if result else (None, None)
+
+    await message.answer(
+        f"💁‍♀️ С возвращением! На основе ваших ответов:\n"
+        f"• Трудность: {sleep_difficulty}\n"
+        f"• Попытка улучшить сон: {sleep_attempt}\n\n"
+        "Сегодня мы будем работать над улучшением вашего сна. Давайте начнем с установки регулярного времени отхода ко сну."
+    )
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("5:00", "6:00", "7:00", "8:00", "9:00", "10:00 и позже")
+    await message.answer("Во сколько вам завтра нужно проснуться?", reply_markup=markup)
+    update_course_stage(message.from_user.id, 7)
+
+# Этап 7: Подтверждение расписания сна
+async def stage_7_set_bedtime(message: types.Message):
+    wake_up_time = message.text
+    set_wake_up_time(message.from_user.id, wake_up_time)
+
+    # Рекомендуемое время сна (по умолчанию 8 часов)
+    bed_time_hour = int(wake_up_time.split(":")[0]) - 8
+    if bed_time_hour < 0:
+        bed_time_hour += 24
+    bed_time = f"{bed_time_hour}:00"
+
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Давай продолжим")
+    await message.answer(
+        f"Отлично! Завтра вам нужно проснуться в {wake_up_time}. "
+        f"Рекомендую лечь спать сегодня в {bed_time}. В кровать лучше лечь за 30-60 минут до сна."
+    )
+    await message.answer("<b>Во второй день мы рассмотрим:</b>\n"
+                         "• Как свет влияет на мелатонин и серотонин?\n"
+                         "• Регулярность сна: биологические часы?\n"
+                         "• Послушаем сказку для сна", parse_mode='HTML')
+    await message.answer("Когда будете готовы, нажмите на кнопку 'Давай продолжим'", reply_markup=markup)
+    update_course_stage(message.from_user.id, 8)
+
+# Этап 8: Завершение второго дня
+async def stage_8_day2_end(message: types.Message):
+    user_id = message.from_user.id
+    # Указываем конкретный файл для отправки
+    file_path = "sleep_complex/Второй день комплекса.mp3"
+    # Проверяем, существует ли файл
+    if os.path.exists(file_path):
+        # Отправляем аудиофайл
+        await message.answer_audio(audio=InputFile(file_path))
+    else:
+        await message.answer("К сожалению, файл не найден. Пожалуйста, попробуйте позже.")
+    # Создаем встроенную кнопку со ссылкой
+    inline_markup = InlineKeyboardMarkup()
+    inline_markup.add(
+        InlineKeyboardButton(text="Прочитать текст 2 дня", url="https://www.netoropis.ru/posts/2DayMasha")
+    )
+    await message.answer(
+        "💁‍♀️ Прислала аудио файл выше.\nОзвучивает один из моих создателей — Джордж.\n\n"
+        "Рекомендую занять удобное положение и послушать, чтобы было полное погружение перед сном. Но если неудобно слушать — можно прочитать, нажав на кнопочку под этим сообщением:",
+        reply_markup=inline_markup
+    )
+    # Завершающее сообщение с переходом в главное меню и кнопкой "Начать следующий день комплекса"
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("🏠Главное меню", "Начать следующий день комплекса")
+    await message.answer(
+        "Послушать другие сказки можно в разделе '💤Особый раздел для сна' через главное меню 😉\n\n"
+        "А пока второй день завершен! Приходите завтра перед сном, расскажу новую сказку!\n\n"
+        "Доброй ночи и приятных снов!\n-Маня",
+        reply_markup=markup
+    )
+    # Обновляем этап прохождения курса
+    update_course_stage(user_id, 9, completed=True, day=2)
+
+# Этап 9: Начало третьего дня через 12 часов
+async def stage_9_day3_intro(message: types.Message):
+    user_id = message.from_user.id
+    if can_access_next_day(user_id, "day2"):
+        await stage_10_breathing_technique(message)
+    else:
+        await message.answer("День 3 будет доступен через 12 часов. Возвращайтесь позже!")
+
+# Функция для извлечения времени подъема из базы
+def get_wake_up_time(user_id):
+    cursor.execute('SELECT wake_up_time FROM course_progress WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    return result[0] if result else "не указано"
+
+# Этап 10: Приветствие третьего дня и подготовка ко сну
+async def stage_10_breathing_technique(message: types.Message):
+    user_id = message.from_user.id
+    wake_up_time = get_wake_up_time(user_id)
+
+    # Рекомендуемое время сна (по умолчанию 8 часов)
+    bed_time_hour = int(wake_up_time.split(":")[0]) - 8
+    if bed_time_hour < 0:
+        bed_time_hour += 24
+    bed_time = f"{bed_time_hour}:00"
+
+    await message.answer(
+        f"💁‍♀️ С возвращением! Надеюсь, ваш сон улучшился. Напомню, цель просыпаться в {wake_up_time} утра, "
+        f"поэтому постарайтесь уснуть сегодня в {bed_time}, как и вчера.\n\nЛечь в кровать лучше за 30-60 минут до сна."
+    )
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Давай продолжим")
+    await message.answer("<b>На третий день мы рассмотрим:</b>\n"
+                         "• Ритуалы для крепкого сна\n"
+                         "• Как снижать тревожность?\n"
+                         "• Послушаем сказку для сна", parse_mode='HTML')
+    await message.answer("Когда будете готовы, нажмите на кнопку 'Давай продолжим'", reply_markup=markup)
+    update_course_stage(message.from_user.id, 11)
+
+
+# Этап 11: Полезные советы для сна
+async def stage_11_sleep_tips(message: types.Message):
+    await message.answer(
+        "Вот третья запись. Как и всегда, рекомендую послушать для полного погружения. Озвучивает один из моих создателей — Джордж."
+    )
+    # Указываем путь к конкретному файлу
+    file_path = "sleep_complex/Третий день комплекса.mp3"
+    # Проверяем, существует ли файл
+    if os.path.exists(file_path):
+        # Отправляем аудиофайл
+        await message.answer_audio(audio=InputFile(file_path))
+    else:
+        await message.answer("К сожалению, файл не найден. Пожалуйста, попробуйте позже.")
+    # Обновляем этап в базе данных
+    update_course_stage(message.from_user.id, 12, completed=True, day=3)
+    # Переходим к завершению третьего дня
+    await stage_12_day3_end(message)
+
+# Этап 12: Завершение третьего дня и курса
+async def stage_12_day3_end(message: types.Message):
+    # Создаем встроенную кнопку со ссылкой на текст 3-го дня
+    inline_markup = InlineKeyboardMarkup()
+    inline_markup.add(
+        InlineKeyboardButton(text="Прочитать текст 3 дня", url="https://www.netoropis.ru/posts/3DayMasha")
+    )
+    await message.answer(
+        "Если неудобно слушать — можно прочитать текст по ссылке:",
+        reply_markup=inline_markup
+    )
+    # Завершающее сообщение
+    await message.answer(
+        "Поздравляю, вы успешно завершили 3-х дневный комплекс! 🎉\n\n"
+        "Надеюсь, что эти советы помогут вам улучшить качество сна. Продолжайте следовать рекомендациям для здорового сна и практикам дыхания.\n\n"
+        "Доброй ночи и приятных снов!\n-Маня"
+    )
+    # Кнопки для дальнейших действий
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("🏠Главное меню", "Пройти комплекс заново")
+    await message.answer("Выберите действие:", reply_markup=markup)
+    # Обновляем этап прохождения курса
+    update_course_stage(message.from_user.id, 13, completed=True, day=3)
+
+#Обработчики ответов на вопросы 1 и 2 stage
+@dp.message_handler(lambda message: message.text in [
+    "Трудно заснуть из-за постоянных мыслей",
+    "Часто просыпаюсь ночью и не могу снова уснуть",
+    "Чувствую себя уставшим даже после долгого сна",
+    "Проблемы с засыпанием из-за шума или света",
+    "Другое (предложите свой вариант)"
+])
+async def handle_sleep_difficulty_response(message: types.Message):
+    await message.answer(
+        "Поняла вас. Это действительно может быть неприятно. Давайте попробуем вместе найти решение, которое поможет вам улучшить сон."
+    )
+    update_course_stage(message.from_user.id, 2, sleep_difficulty=message.text)
+    await stage_2_set_sleep_goal(message)
+
+@dp.message_handler(lambda message: message.text in [
+    "Мелатонин или другие добавки",
+    "Чтение книг или прослушивание музыки перед сном",
+    "Дыхательные техники или медитации",
+    "Полное затемнение комнаты/убирал гаджеты",
+    "Ничего пока не пробовал",
+    "Другое (предложите свой вариант)"
+])
+async def handle_sleep_improvement_response(message: types.Message):
+    await message.answer(
+        "Спасибо, что поделились. Ваш опыт очень важен Теперь я подберу подходящий для вас инструмент, чтобы начать работать над улучшением сна."
+    )
+    update_course_stage(message.from_user.id, 3, sleep_improvement_attempts=message.text)
+    await stage_3_relaxation(message)
+
+# Обработчик выбора времени подъема для этапа 6
+@dp.message_handler(lambda message: message.text in ["5:00", "6:00", "7:00", "8:00", "9:00", "10:00 и позже"])
+async def handle_wake_up_time(message: types.Message):
+    await stage_7_set_bedtime(message)
+
+# Обработчик кнопки "Начать следующий день комплекса"
+@dp.message_handler(lambda message: message.text == "Начать следующий день комплекса")
+async def handle_start_next_day(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+    # Логика перехода к следующему дню
+    if stage == 5:  # После завершения первого дня
+        await stage_6_wake_up_time(message)  # Переход ко второму дню
+    elif stage == 9:  # После завершения второго дня
+        await stage_10_breathing_technique(message)  # Переход к третьему дню
+    else:
+        await message.answer("Что-то пошло не так. Пожалуйста, начните с главного меню.")
+
+# Обработчик нажатия "Давай продолжим" с учетом текущего этапа
+@dp.message_handler(lambda message: message.text == "Давай продолжим")
+async def handle_bed_confirmation(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+
+    # Логика перехода к следующему этапу в зависимости от текущего этапа
+    if stage == 8:  # Завершение второго дня
+        await stage_8_day2_end(message)
+    elif stage == 11:  # Этап третьего дня (начало этапа 11)
+        await stage_11_sleep_tips(message)  # Переход к этапу с советами для сна
+
+# Обработчик кнопки "Начать" для перехода с этапа 0 на этап 1
+@dp.message_handler(lambda message: message.text == "Начать")
+async def start_course_step1(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+    await start_sleep_course(message)
+
+async def start_sleep_course(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+
+    if stage == 0:
+        await stage_0_welcome(message)
+    elif stage == 1:
+        await stage_1_sleep_duration(message)
+    elif stage == 2:
+        await stage_2_set_sleep_goal(message)
+    elif stage == 3:
+        await stage_3_relaxation(message)
+    elif stage == 4:
+        await stage_4_story(message)
+    elif stage == 5:
+        if can_access_next_day(user_id, "day1"):
+            await stage_6_wake_up_time(message)
+        else:
+            await message.answer("День 2 будет доступен через 12 часов. Возвращайтесь позже!")
+    elif stage == 7:
+        await stage_7_set_bedtime(message)
+    elif stage == 8:
+        await stage_8_day2_end(message)
+    elif stage == 9:
+        if can_access_next_day(user_id, "day2"):
+            await stage_10_breathing_technique(message)
+        else:
+            await message.answer("День 3 будет доступен через 12 часов. Возвращайтесь позже!")
+    elif stage == 11:
+        await stage_12_day3_end(message)
+    elif stage >= 13:
+        markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        markup.add("🏠Главное меню", "Пройти комплекс заново")
+        await message.answer("Комплекс завершен! Нажмите 'Пройти комплекс заново', если хотите пройти комплекс заново.", reply_markup=markup)
+
+# Обработчик кнопки "Продолжить"
+@dp.message_handler(lambda message: message.text == "Продолжить")
+async def handle_relaxation_confirmation(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+    # Логика перехода к следующему этапу в зависимости от текущего этапа
+    if stage == 3:  # Переход с этапа 3 (Техника расслабления) на этап 4 (Отправка аудиофайла)
+        await stage_4_story(message)
+    elif stage == 8:  # Завершение второго дня
+        await stage_8_day2_end(message)
+    elif stage == 11:  # Этап третьего дня (начало этапа 11)
+        await stage_11_sleep_tips(message)  # Переход к этапу с советами для сна
+    else:
+        await message.answer("Что-то пошло не так. Пожалуйста, начните с главного меню.")
+
+# Функция сброса прогресса курса
+def reset_course_progress(user_id):
+    cursor.execute('''
+        UPDATE course_progress 
+        SET stage = 0, day1_completion_time = NULL, day2_completion_time = NULL, day3_completion_time = NULL
+        WHERE user_id = ?
+    ''', (user_id,))
+    conn.commit()
+    print(f"[DEBUG] Прогресс курса сброшен для пользователя {user_id}")
+
+# Обработчик кнопки "Пройти комплекс заново"
+@dp.message_handler(lambda message: message.text == "Пройти комплекс заново")
+async def handle_restart_course(message: types.Message):
+    user_id = message.from_user.id
+    # Сброс прогресса
+    reset_course_progress(user_id)
+    await message.answer("История комплекса сброшена. Давайте начнем заново!")
+    await stage_0_welcome(message)
+
+# Обработчик ответа на установку времени сна
+@dp.message_handler(lambda message: message.text in ["До 21:00", "С 21:00 до 23:00"])
+async def handle_day2_bedtime_response(message: types.Message):
+    user_id = message.from_user.id
+    await message.answer("Отлично! Постепенно организм привыкнет к новому режиму.")
+    await start_sleep_course(message)  # Продолжить курс
+
+@dp.message_handler(lambda message: message.text == "Я в кровати")
+async def handle_bedtime_confirmation(message: types.Message):
+    user_id = message.from_user.id
+    stage = get_course_stage(user_id)
+    # Логика перехода на этап 3 дня
+    if stage == 9:
+        await stage_10_breathing_technique(message)
+    elif stage == 10:
+        await stage_11_sleep_tips(message)
+
+# Обработчик кнопки "Главное меню" - возвращает в основное меню
+@dp.message_handler(lambda message: message.text == "🏠Главное меню")
+async def back_to_main_menu(message: types.Message):
+    await send_permanent_menu(message)
+
+# Функция для получения цели сна из базы
+def get_sleep_goal(user_id):
+    cursor.execute('SELECT sleep_goal FROM course_progress WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    return result[0] if result else None
+
+# Обработчик выбора 📚Пройти sleep комплекс
+@dp.message_handler(lambda message: message.text == "📚Пройти sleep комплекс")
+async def sleep_complex(message: types.Message):
+    await start_sleep_course(message)
+
+# Обработчик ответов на тест
+@dp.message_handler(lambda message: message.text in ["Менее 6 часов", "7 часов", "8 часов", "9 часов и больше"])
+async def handle_test_response(message: types.Message):
+    user_id = message.from_user.id
+    response = message.text
+    await message.answer(f"Хорошо, так и запишем ✍️ {response}")
+    await start_sleep_course(message)  # Переход к следующему этапу
+
+# Обработчик установки цели сна
+@dp.message_handler(lambda message: message.text in ["7 часов", "8 часов", "9 часов"])
+async def set_sleep_goal(message: types.Message):
+    user_id = message.from_user.id
+    sleep_goal = int(message.text.split()[0])
+    # Сохранение цели сна в базе данных
+    cursor.execute('UPDATE course_progress SET sleep_goal = ?, stage = ? WHERE user_id = ?', (sleep_goal, 3, user_id))
+    conn.commit()
+    # Возвращаемся к логике курса
+    await start_sleep_course(message)
+
+#def get_random_mp3_file(folder, user_id):
+#    try:
+#        files = [f for f in os.listdir(folder) if f.endswith('.mp3')]
+#        if not files:
+#            print(f"[DEBUG] No .mp3 files found in folder {folder} for user {user_id}")
+#            return None
+#        file_path = os.path.join(folder, random.choice(files))
+#        print(f"[DEBUG] Selected file {file_path} for user {user_id}")
+#        return file_path
+#    except Exception as e:
+#        print(f"[ERROR] Error accessing folder {folder}: {e}")
+#        return None
+##############################################################################################################
+
+# Обработчик подписки
+@dp.message_handler(lambda message: message.text == "🌟Премиум доступ")
+async def handle_subscription(message: types.Message):
+    status, end_date = get_subscription_status(message.from_user.id)
+    # Если подписка уже активна, показываем сообщение с информацией о сроке действия
+    if status:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        markup.add("Условия использования", "Тех. поддержка", "Дневник настроений", "🌟Премиум доступ",
+                   "🏠Главное меню")
+        await message.answer(f"Ваш премиум доступ активен до {end_date}. Приятного пользования!", reply_markup=markup)
+        return
+    # Если подписка не активна, предлагаем пользователю выбрать один из трех типов
+    await message.answer(
+        "<b>💎 Тарифы на выбор:</b>\n"
+        "• На 30 дней - 450 рублей\n"
+        "• На 365 дней + 30 дней бесплатно 🎁 - 3600 рублей\n"
+        "<u>Экономия 39%! Это всего 276 рублей в месяц!</u> "
+        "Дешевле капучинки", parse_mode='HTML')
+        # Кнопки с выбором типа подписки в 2 строки и 2 столбца
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.row("Оформить доступ на 30 дней")
+    markup.row("Оформить доступ на 365+30 дней")
+    markup.add("🏠Главное меню")  # Кнопка для возврата в главное меню
+    # Инлайн-кнопка под сообщением
+    inline_markup = types.InlineKeyboardMarkup()
+    inline_markup.add(
+        types.InlineKeyboardButton(text="Прочитать про премиум доступ", url="https://www.netoropis.ru/")
+    )
+    await message.answer(
+        "<b>Спокойный сон — без усилий</b>\n"
+        "Премиум-доступ к боту Мане — это не просто сказки, а ваш инструмент для лёгкого засыпания, глубокого сна и спокойного утра\n\n"
+        "🎯 <b>Что вы получите?</b>\n"
+        "• Подготовитесь к лучшему отдыху благодаря уникальным историям с эффектом медитации, озвученным известными голосами\n"
+        "• Проследите за вашим настроением, каждый вечер, перед сном\n"
+        "• А еще - создание и озвучка персональных историй по запросу, превращая ваши мечты в реальность!",
+        parse_mode='HTML', reply_markup=inline_markup)  # Прикрепляем инлайн-кнопку
+    # Отправляем второе сообщение с основными кнопками
+    await message.answer("Выберите удобный для вас вариант подписки:", reply_markup=markup)
+
+# Обработчик выбора типа подписки
+@dp.message_handler(
+    lambda message: message.text in ["Оформить доступ на 30 дней", "Оформить доступ на 365+30 дней"])
+async def process_subscription_choice(message: types.Message):
+    # Обработка выбора пользователя
+    if message.text == "Оформить доступ на 30 дней":
+        value = "450.00"
+        description = "Премиум доступ на 30 дней"
+        days = 30
+    elif message.text == "Оформить доступ на 365+30 дней":
+        value = "3600.00"
+        description = "Премиум доступ на 365 дней + 30 дней бесплатно"
+        days = 365 + 30  # 1 год + 2 месяца
+
+    # Создаем платеж
+    payment_data = create_payment(value, description)
+
+    if payment_data:
+        confirmation_url = payment_data['confirmation']['confirmation_url']
+        payment_id = payment_data['id']
+
+        # Создаем клавиатуру с кнопками, которые остаются после нажатия
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("Оплатить", url=confirmation_url))
+
+        # Кнопки подписки в 2 столбца и 2 строки, чтобы не пропадали
+        subscription_markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+        subscription_markup.row("Оформить доступ на 30 дней")
+        subscription_markup.row("Оформить доступ на 365+30 дней", "🏠Главное меню")
+
+        # Отправляем сообщение с ссылкой на оплату и сохраняем клавиатуру
+        await message.answer(f"Перейдите по ссылке для оплаты: {confirmation_url}", reply_markup=markup)
+        await message.answer("После успешной оплаты, доступ к уникальному контенту будет открыт", reply_markup=subscription_markup)
+
+        # Проверяем статус платежа
+        payment_successful = await check_payment(payment_id)
+        if payment_successful:
+            # Обновляем статус подписки
+            update_subscription_status(message.from_user.id, True, days)
+            await message.answer(f"Доступ оформлен на {days} дней. Приятного пользования!\n\nДеньги не спишутся в крайний день, автопродление отключено")
+            # Переход в главное меню после успешной оплаты
+            await send_permanent_menu(message)
+        else:
+            await message.answer("Похоже не удалось подтвердить оплату по некоторым сформированным ссылкам. Если оплата уже прошла, не беспокойтесь. Проверить статус можно через раздел 'Профиль->Премиум доступ'")
+    else:
+        await message.answer("Произошла ошибка при создании платежа. Попробуйте снова позже.")
+
+# Функция для отображения вариантов подписки, если она неактивна
+async def show_subscription_options(message: types.Message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.row("Оформить доступ на 30 дней")
+    markup.row("Оформить доступ на 365+30 дней")
+    markup.add("🏠Главное меню")
+
+    await message.answer(
+        "Выберите, какой уровень доступа купить?\n\n"
+        "Есть 3 уровня премиум доступа:\n"
+        "- 30 дней — 450 рублей\n"
+        "- 365 дней + 30 дней бесплатно — 3600 рублей",
+        reply_markup=markup
+    )
+
+#Если подписка активна, бот показывает, сколько дней осталось до окончания подписки и дату её завершения.
+#Если подписки нет, бот предлагает выбрать тип подписки из меню.
+@dp.message_handler(commands=['🌟Премиум доступ'])
+async def show_subscription_status(message: types.Message):
+    # Проверяем, активна ли подписка у пользователя
+    subscription = get_subscription_status(message.from_user.id)  # Получаем данные о подписке
+    if subscription and subscription['active']:
+        remaining_days = (subscription['end_date'] - datetime.now()).days
+        end_date = subscription['end_date'].strftime('%d.%m.%Y')
+        # Отправляем сообщение о текущей активной подписке
+        await message.answer(f"Ваш премиум доступ уже активен. До окончания доступа осталось {remaining_days} дней.\n"
+                             f"Дата окончания доступа: {end_date}")
+    else:
+        # Если подписки нет, предлагаем купить
+        await message.answer("Выберите уровень премиум доступа", reply_markup=subscription_menu())
+
+# Обработчик кнопки "Условия использования"
+@dp.message_handler(lambda message: message.text == "Условия использования")
+async def terms_of_use(message: types.Message):
+    terms_text = (
+        "Публичная оферта\nПользовательское соглашение\nПолитика конфиденциальности\n\nДоступны по ссылке: https://www.netoropis.ru/legal"
+    )
+    # Подменю "Профиль"
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Условия использования", "Тех. поддержка", "Дневник настроений", "🌟Премиум доступ", "🏠Главное меню")
+    await message.answer(terms_text, reply_markup=markup)
+
+#Обработчик кнопки "🏠Главное меню"
+@dp.message_handler(lambda message: message.text == "🏠Главное меню")
+async def back_to_menu(message: types.Message):
+    await send_permanent_menu(message)
+
+# Обработчик кнопки "Отменить подписку"
+#@dp.message_handler(lambda message: message.text == "Отменить подписку")
+#async def cancel_subscription(message: types.Message):
+    #    user_id = message.from_user.id
+    #    update_subscription_status(user_id, False)  # Устанавливаем статус подписки в False (отменено)
+    # Сообщение об успешной отмене подписки
+    #    await message.answer("Автопродление отключено у всех пользователей и деньги не спишутся в крайний день, но я прослежу, чтобы ничего точно не списалось. Вы сможете пользоваться ботом до окончания оплаченного периода. Если у вас есть вопросы по поводу возврата денежных средств, опишите подробно ситуацию и напишите нам на почту netoropisinfo@inbox.ru")
+    # Создаем меню с кнопками
+    #markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    #markup.add("Условия использования", "Тех. поддержка", "Отменить подписку", "Дневник настроений", "🌟Премиум доступ",
+    #           "🏠Главное меню")
+    # Отправляем сообщение с меню
+    #await message.answer("Выберите действие:", reply_markup=markup)
+
+
+@dp.message_handler(lambda message: message.text == "Да")
+async def cancel_subscription(message: types.Message):
+    update_subscription_status(message.from_user.id, False)  # Отменяем подписку
+    await message.answer("Премиум доступ отменен. Мы всегда будем рады видеть вас снова.")
+    await profile(message)  # Возвращаем в подменю "Профиль"
+
+
+@dp.message_handler(lambda message: message.text == "Нет, хочу дальше хорошо спать")
+async def keep_subscription(message: types.Message):
+    await message.answer("Я очень рада, что вы решили остаться!")
+    await profile(message)  # Возвращаем в подменю "Профиль"
+
+# Обработчик профиля с добавлением кнопки "Дневник настроений"
+@dp.message_handler(lambda message: message.text == "👤Профиль")
+async def profile(message: types.Message):
+    # Подменю "Профиль"
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Условия использования", "Тех. поддержка", "Дневник настроений", "🌟Премиум доступ", "🏠Главное меню")
+    await message.answer("Ваш профиль. Что хотите сделать?", reply_markup=markup)
+
+
+# Обработчик для кнопки "Тех. поддержка"
+@dp.message_handler(lambda message: message.text == "Тех. поддержка")
+async def feedback(message: types.Message):
+    feedback_text = (
+        "Если вы хотите оставить свой отзыв, у вас есть вопросы или пожелания, "
+        "пожалуйста, напишите на эту почту. Я обязательно отвечу ответным письмом. "
+        "netoropisinfo@inbox.ru"
+    )
+    # Создаем меню с кнопками
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("Условия использования", "Тех. поддержка", "Дневник настроений", "🌟Премиум доступ",
+               "🏠Главное меню")
+    # Отправляем сообщение с меню
+    await message.answer(feedback_text, reply_markup=markup)
+
+# Обработчик кнопки "Дневник настроений"
+@dp.message_handler(lambda message: message.text == "Дневник настроений")
+async def mood_journal_menu(message: types.Message):
+    # Проверка срабатывания функции
+    print("Кнопка 'Дневник настроений' нажата")  # Вывод в консоль для отладки
+    # Меню выбора периода для отображения настроений
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("7 дней", "14 дней", "⏪Меню профиля")
+    await message.answer("Выберите период для отображения настроений:", reply_markup=markup)
+
+# Обработчик кнопки "⏪Меню профиля"
+@dp.message_handler(lambda message: message.text == "⏪Меню профиля")
+async def back_to_profile_menu(message: types.Message):
+    await profile(message)  # Возвращает пользователя в меню профиля
+
+# Обработчик выбора периода (7 дней или 14 дней)
+@dp.message_handler(lambda message: message.text in ["7 дней", "14 дней"])
+async def mood_history(message: types.Message):
+    # Устанавливаем количество дней для фильтра
+    days = 7 if message.text == "7 дней" else 14
+    mood_history_text = get_mood_history(message.from_user.id, days)  # Получаем историю настроений
+  #  await message.answer(mood_history_text)  # Отправляем результат пользователю
+    # Меню выбора периода для отображения настроений
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    markup.add("7 дней", "14 дней", "⏪Меню профиля")
+    await message.answer(mood_history_text, reply_markup=markup)
+
+# Функция для получения истории настроений
+def get_mood_history(user_id, days):
+    cursor.execute('''
+        SELECT date, mood FROM mood_log
+        WHERE user_id = ? AND date >= DATE('now', ? || ' days')
+        ORDER BY date DESC
+    ''', (user_id, -days))
+
+    records = cursor.fetchall()
+
+    if not records:
+        return "История настроений за выбранный период пуста."
+
+    # Формируем ответное сообщение с историей настроений
+    mood_history_text = "История настроений за выбранный период:\n\n"
+    for record in records:
+        date, mood = record
+        mood_history_text += f"{date}: {mood}\n"
+    return mood_history_text
+
+@dp.message_handler(lambda message: message.text == "Меню профиля")
+async def return_to_profile_menu(message: types.Message):
+    await profile(message)
+
+# Обработчик текстовых сообщений
+@dp.message_handler()
+async def handle_user_message(message: types.Message):
+    """
+    Обрабатывает любые текстовые сообщения, отправленные пользователем.
+    Отправляет милое сообщение о разработке ИИ.
+    """
+    response = ("Ой, сейчас я пока не умею отвечать на текстовые сообщения, "
+                "но скоро появится умный ИИ, который будет помогать! 🧠✨ Оставайтесь с нами!")
+    await message.answer(response)
+
+# Старт бота
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
